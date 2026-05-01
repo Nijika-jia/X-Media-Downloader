@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+    <div class="x-sidebar-header">
+        <div class="x-sidebar-title">X-媒体下载器 <span id="x-count">(0)</span></div>
+        <div class="x-sidebar-actions">
+            <button class="x-icon-btn" id="x-select-all-btn" title="全选">全选</button>
+            <button class="x-icon-btn primary" id="x-download-selected-btn" title="下载选中">下载选中</button>
+            <button class="x-icon-btn" id="x-clear-btn" title="清空列表">🗑️</button>
+        </div>
+    </div>
+    
+    <div class="x-sidebar-filters">
+        <div class="x-filter-group">
+            <button class="x-filter-btn active" data-filter="all">全部</button>
+            <button class="x-filter-btn" data-filter="photo">图片</button>
+            <button class="x-filter-btn" data-filter="video">视频</button>
+            <button class="x-filter-btn" data-filter="downloaded">已下载</button>
+            <button class="x-filter-btn" data-filter="not_downloaded">未下载</button>
+        </div>
+        <div class="x-view-toggle">
+            <label class="x-toggle-switch" title="切换全图显示">
+                <input type="checkbox" id="x-full-view-toggle">
+                <span class="x-slider"></span>
+            </label>
+            <span style="font-size: 12px; color: #71767b; margin-left: 6px;">全图</span>
+        </div>
+    </div>
+    
+    <div class="x-sidebar-content">
+        <div class="x-media-grid" id="x-media-grid"></div>
+        <div id="x-empty-state" style="padding: 20px; text-align: center; color: #666; font-size: 13px;">
+            浏览 X/Twitter 自动捕获媒体
+        </div>
+    </div>
+
+    <script src="sidepanel.js"></script>
+</body>
+</html>
