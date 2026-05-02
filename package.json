@@ -1,0 +1,21 @@
+{
+  "name": "x-media-downloader",
+  "version": "2.0.0",
+  "description": "A Chrome Extension to download media (Images & Videos) from X.com (Twitter).",
+  "scripts": {
+    "dev": "cross-env webpack --watch --progress --config webpack.config.js",
+    "build": "cross-env NODE_ENV=production webpack --config webpack.config.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "copy-webpack-plugin": "^14.0.0",
+    "cross-env": "^10.1.0",
+    "css-loader": "^7.1.4",
+    "html-webpack-plugin": "^5.6.7",
+    "mini-css-extract-plugin": "^2.10.2",
+    "webpack": "^5.106.2",
+    "webpack-cli": "^7.0.2"
+  }
+}
