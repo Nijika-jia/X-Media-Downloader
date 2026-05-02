@@ -1,14 +1,26 @@
 {
   "name": "x-media-downloader",
   "version": "2.0.0",
-  "description": "A Chrome Extension to download media (Images & Videos) from X.com (Twitter).",
+  "description": "A Chrome Extension to download media (Images & Videos) from X.com (Twitter) with Side Panel support.",
   "scripts": {
     "dev": "cross-env webpack --watch --progress --config webpack.config.js",
     "build": "cross-env NODE_ENV=production webpack --config webpack.config.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "chrome-extension",
+    "twitter",
+    "x.com",
+    "media-downloader",
+    "video-downloader",
+    "image-downloader",
+    "sidepanel"
+  ],
+  "author": "Nijika-jia",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nijika-jia/X-Media-Downloader.git"
+  },
   "devDependencies": {
     "copy-webpack-plugin": "^14.0.0",
     "cross-env": "^10.1.0",
