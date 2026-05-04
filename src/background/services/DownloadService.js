@@ -4,7 +4,7 @@ import AbstractService from './AbstractService';
 class DownloadService extends AbstractService {
   static instance;
 
-  cachedDownloadIdFilenameMap = new Map();
+  cachedUrlFilenameMap = new Map();
 
   static onDeterminingFilenameListenered = false;
 
@@ -14,22 +14,22 @@ class DownloadService extends AbstractService {
   }
 
   listenOnDeterminingFilename() {
-    if (DownloadService.onDeterminingFilenameListenered === true) return;
+    if (DownloadService.onDeterminingFilenameListenered) return;
     DownloadService.onDeterminingFilenameListenered = true;
 
     browser.downloads.onDeterminingFilename.addListener((downloadItem, suggest) => {
-      const filenameSuggestion = {
-        conflictAction: 'uniquify'
-      };
-
-      if (this.cachedDownloadIdFilenameMap.has(downloadItem.url)) {
-        filenameSuggestion.filename = this.cachedDownloadIdFilenameMap.get(downloadItem.url);
-        this.cachedDownloadIdFilenameMap.delete(downloadItem.url);
+      if (this.cachedUrlFilenameMap.has(downloadItem.url)) {
+        suggest({
+          filename: this.cachedUrlFilenameMap.get(downloadItem.url),
+          conflictAction: 'uniquify'
+        });
+        this.cachedUrlFilenameMap.delete(downloadItem.url);
       } else {
-        filenameSuggestion.filename = downloadItem.filename;
+        suggest({
+          filename: downloadItem.filename,
+          conflictAction: 'uniquify'
+        });
       }
-
-      suggest(filenameSuggestion);
     });
   }
 
@@ -38,10 +38,6 @@ class DownloadService extends AbstractService {
       DownloadService.instance = new DownloadService();
     }
     return DownloadService.instance;
-  }
-
-  cacheDownloadIdFilename(url, filename) {
-    this.cachedDownloadIdFilenameMap.set(url, filename);
   }
 
   getDownloadFolder(category) {
@@ -74,7 +70,7 @@ class DownloadService extends AbstractService {
         }
         const filename = `${folder}/x_${item.id}.${ext}`;
 
-        this.cacheDownloadIdFilename(item.url, filename);
+        this.cachedUrlFilenameMap.set(item.url, filename);
 
         browser.downloads.download({
           url: item.url,

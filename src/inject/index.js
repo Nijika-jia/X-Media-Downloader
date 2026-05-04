@@ -77,6 +77,7 @@ XMLHttpRequest.prototype.open = function (method, url) {
 
 XMLHttpRequest.prototype.send = function (body) {
   this.addEventListener('load', function () {
+    if (this.responseType && this.responseType !== '' && this.responseType !== 'text') return;
     if (this.responseText) {
       try {
         const data = JSON.parse(this.responseText);
