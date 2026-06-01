@@ -1,12 +1,16 @@
 import MediaStore from './MediaStore';
 import MediaGridRenderer from './MediaGridRenderer';
 
+const CATEGORY_LABELS = { '': '默认', real: '真人', anime: '动漫' };
+
 class SidePanelApp {
   constructor() {
     this.mediaStore = new MediaStore();
     this.renderer = new MediaGridRenderer(this.mediaStore);
     this.port = null;
     this.portReconnectTimer = null;
+    this.bossMode = false;
+    this.connected = false;
 
     this.cacheElements();
     this.bindEvents();
@@ -23,10 +27,15 @@ class SidePanelApp {
     this.emptyState = document.getElementById('x-empty-state');
     this.filterBtns = document.querySelectorAll('.x-filter-btn');
     this.fullViewToggle = document.getElementById('x-full-view-toggle');
+    this.bossKeyBtn = document.getElementById('x-boss-key-btn');
+    this.bossOverlay = document.getElementById('x-boss-overlay');
+    this.statusConnection = document.getElementById('x-status-connection');
+    this.statusCategory = document.getElementById('x-status-category');
+    this.statusBoss = document.getElementById('x-status-boss');
   }
 
   bindEvents() {
-    this.renderer.onDownload = (items, category) => this.downloadItems(items, category);
+    this.renderer.onDownload = (items, category) => this.downloadItems(items, category || this.downloadCategorySelect.value);
     this.renderer.onShowLightbox = (item) => this.showLightbox(item);
 
     this.mediaStore.addListener((event) => {
@@ -68,6 +77,44 @@ class SidePanelApp {
       this.updateSelectionUI();
       this.emptyState.style.display = 'block';
     });
+
+    this.bossKeyBtn.addEventListener('click', () => this.toggleBossMode());
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.toggleBossMode();
+      }
+    });
+
+    this.downloadCategorySelect.addEventListener('change', () => {
+      this.updateStatusCategory();
+    });
+  }
+
+  toggleBossMode() {
+    this.bossMode = !this.bossMode;
+    this.bossOverlay.classList.toggle('active', this.bossMode);
+    this.bossKeyBtn.classList.toggle('boss-active', this.bossMode);
+    this.statusBoss.style.display = this.bossMode ? 'inline-flex' : 'none';
+  }
+
+  updateConnectionStatus(connected) {
+    this.connected = connected;
+    const dot = this.statusConnection.querySelector('.x-status-dot');
+    const label = this.statusConnection.querySelector('span:last-child');
+    if (connected) {
+      dot.className = 'x-status-dot x-status-dot-connected';
+      label.textContent = '采集中';
+    } else {
+      dot.className = 'x-status-dot x-status-dot-disconnected';
+      label.textContent = '已断开';
+    }
+  }
+
+  updateStatusCategory() {
+    const value = this.downloadCategorySelect.value;
+    const label = CATEGORY_LABELS[value] || value;
+    this.statusCategory.textContent = `📁 ${label}`;
   }
 
   listenForMessages() {
@@ -81,6 +128,8 @@ class SidePanelApp {
   connectPort() {
     try {
       this.port = chrome.runtime.connect({ name: 'media' });
+      this.updateConnectionStatus(true);
+
       this.port.onMessage.addListener((message) => {
         if (message.event === 'media_intercepted') {
           this.handleMediaItems(message.items, message.tabId);
@@ -88,10 +137,12 @@ class SidePanelApp {
       });
       this.port.onDisconnect.addListener(() => {
         this.port = null;
+        this.updateConnectionStatus(false);
         this.schedulePortReconnect();
       });
     } catch (e) {
       this.port = null;
+      this.updateConnectionStatus(false);
       this.schedulePortReconnect();
     }
   }
@@ -151,12 +202,7 @@ class SidePanelApp {
         if (result.downloaded && result.downloaded.length > 0) {
           this.mediaStore.markDownloaded(result.downloaded);
           result.downloaded.forEach(id => {
-            const div = this.renderer.grid.querySelector(`[data-id="${id}"]`);
-            if (div) {
-              const dlBtn = div.querySelector('.x-item-download-btn');
-              if (dlBtn) this.renderer.markDownloadButtonDownloaded(dlBtn);
-              this.renderer.updateItemSelection(div, id, false);
-            }
+            this.renderer.markItemDownloaded(id);
           });
           this.mediaStore.clearSelection();
           this.renderer.updateAllItemSelections();
@@ -166,12 +212,7 @@ class SidePanelApp {
           this.showDuplicateToast(result.duplicates.length);
           result.duplicates.forEach(id => {
             this.mediaStore.markDownloaded(id);
-            const div = this.renderer.grid.querySelector(`[data-id="${id}"]`);
-            if (div) {
-              const dlBtn = div.querySelector('.x-item-download-btn');
-              if (dlBtn) this.renderer.markDownloadButtonDownloaded(dlBtn);
-              this.renderer.updateItemSelection(div, id, false);
-            }
+            this.renderer.markItemDownloaded(id);
           });
           this.mediaStore.clearSelection();
           this.renderer.updateAllItemSelections();

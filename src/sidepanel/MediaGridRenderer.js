@@ -1,4 +1,4 @@
-import { ICON_SELECT, ICON_CHECK, ICON_DOWNLOAD, DOWNLOAD_CATEGORIES } from './constants';
+import { ICON_SELECT, ICON_CHECK, DOWNLOAD_CATEGORIES } from './constants';
 
 class MediaGridRenderer {
   constructor(mediaStore) {
@@ -7,8 +7,6 @@ class MediaGridRenderer {
     this.currentFilter = 'all';
     this.onDownload = null;
     this.onShowLightbox = null;
-
-    this.bindDocumentClick();
   }
 
   render() {
@@ -41,15 +39,17 @@ class MediaGridRenderer {
       <span class="x-media-type">${item.type}</span>
       ${item.downloaded ? '<span class="x-downloaded-badge">已下载</span>' : ''}
       <div class="x-item-btn x-item-select-btn ${isSelected ? 'selected' : ''}" title="${selectTitle}">${isSelected ? ICON_CHECK : ICON_SELECT}</div>
-      <div class="x-item-btn x-item-download-btn ${item.downloaded ? 'downloaded' : ''}" title="${item.downloaded ? '已下载' : '选择分类下载'}">${item.downloaded ? ICON_CHECK : ICON_DOWNLOAD}</div>
-      <div class="x-download-menu" role="menu">
-        ${DOWNLOAD_CATEGORIES.map(category => `<button type="button" data-category="${category.value}">${category.label}</button>`).join('')}
-      </div>
+      ${item.downloaded ? `<div class="x-item-btn x-item-download-btn downloaded" title="已下载">${ICON_CHECK}</div>` : `
+      <div class="x-dl-actions">
+        ${DOWNLOAD_CATEGORIES.map((cat, i) => `<button class="x-dl-action-btn x-dl-cat-${i}" data-category="${cat.value}" title="下载到${cat.label}">${cat.label}</button>`).join('')}
+      </div>`}
     `;
 
     this.bindThumbClick(div, item);
     this.bindSelectClick(div, item);
-    this.bindDownloadClick(div, item);
+    if (!item.downloaded) {
+      this.bindDownloadActions(div, item);
+    }
 
     if (prepend) {
       this.grid.prepend(div);
@@ -87,26 +87,18 @@ class MediaGridRenderer {
     });
   }
 
-  bindDownloadClick(div, item) {
-    const dlBtn = div.querySelector('.x-item-download-btn');
-    const downloadMenu = div.querySelector('.x-download-menu');
+  bindDownloadActions(div, item) {
+    const actions = div.querySelector('.x-dl-actions');
+    if (!actions) return;
 
-    dlBtn.addEventListener('click', (e) => {
+    actions.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (dlBtn.classList.contains('downloaded')) return;
-      this.closeDownloadMenus(downloadMenu);
-      downloadMenu.classList.toggle('open');
-    });
-
-    downloadMenu.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const option = e.target.closest('button[data-category]');
-      if (!option || dlBtn.classList.contains('downloaded')) return;
+      const btn = e.target.closest('.x-dl-action-btn');
+      if (!btn) return;
 
       if (this.onDownload) {
-        this.onDownload([item], option.dataset.category);
+        this.onDownload([item], btn.dataset.category);
       }
-      downloadMenu.classList.remove('open');
     });
   }
 
@@ -128,36 +120,26 @@ class MediaGridRenderer {
     });
   }
 
-  markDownloadButtonDownloaded(dlBtn) {
-    dlBtn.classList.add('downloaded');
-    dlBtn.innerHTML = ICON_CHECK;
-    dlBtn.title = '已下载';
+  markItemDownloaded(id) {
+    const div = this.grid.querySelector(`[data-id="${id}"]`);
+    if (!div) return;
 
-    const mediaItem = dlBtn.closest('.x-media-item');
-    if (mediaItem) {
-      mediaItem.classList.add('downloaded');
-      const existingBadge = mediaItem.querySelector('.x-downloaded-badge');
-      if (!existingBadge) {
-        const badge = document.createElement('span');
-        badge.className = 'x-downloaded-badge';
-        badge.textContent = '已下载';
-        mediaItem.appendChild(badge);
-      }
+    div.classList.add('downloaded');
+
+    const existingBadge = div.querySelector('.x-downloaded-badge');
+    if (!existingBadge) {
+      const badge = document.createElement('span');
+      badge.className = 'x-downloaded-badge';
+      badge.textContent = '已下载';
+      div.appendChild(badge);
     }
-  }
 
-  closeDownloadMenus(exceptMenu = null) {
-    document.querySelectorAll('.x-download-menu.open').forEach(menu => {
-      if (menu !== exceptMenu) {
-        menu.classList.remove('open');
-      }
-    });
-  }
+    const actions = div.querySelector('.x-dl-actions');
+    if (actions) {
+      actions.outerHTML = `<div class="x-item-btn x-item-download-btn downloaded" title="已下载">${ICON_CHECK}</div>`;
+    }
 
-  bindDocumentClick() {
-    document.addEventListener('click', () => {
-      this.closeDownloadMenus();
-    });
+    this.updateItemSelection(div, id, false);
   }
 
   setFilter(filter) {

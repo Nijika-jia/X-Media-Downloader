@@ -18,6 +18,7 @@
       </label>
       <button class="x-icon-btn" id="x-select-all-btn" title="全选">全选</button>
       <button class="x-icon-btn primary" id="x-download-selected-btn" title="下载选中">下载选中</button>
+      <button class="x-icon-btn" id="x-boss-key-btn" title="老板键 (Esc)">🛡️</button>
       <button class="x-icon-btn" id="x-clear-btn" title="清空列表">清空</button>
     </div>
   </div>
@@ -43,6 +44,23 @@
     <div class="x-media-grid" id="x-media-grid"></div>
     <div id="x-empty-state" style="padding: 20px; text-align: center; color: #666; font-size: 13px;">
       浏览 X/Twitter 时会自动捕获媒体
+    </div>
+  </div>
+
+  <div class="x-status-bar" id="x-status-bar">
+    <span class="x-status-item" id="x-status-connection">
+      <span class="x-status-dot x-status-dot-connected"></span>
+      <span>采集中</span>
+    </span>
+    <span class="x-status-item" id="x-status-category">📁 默认</span>
+    <span class="x-status-item x-status-boss" id="x-status-boss" style="display:none;">🛡️ 隐私模式</span>
+  </div>
+
+  <div class="x-boss-overlay" id="x-boss-overlay">
+    <div class="x-boss-overlay-content">
+      <div class="x-boss-icon">🔒</div>
+      <div class="x-boss-text">页面找不到了</div>
+      <div class="x-boss-hint">请检查 URL 是否正确</div>
     </div>
   </div>
 
