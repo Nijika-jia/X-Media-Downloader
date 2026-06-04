@@ -1,5 +1,6 @@
 import MediaStore from './MediaStore';
 import MediaGridRenderer from './MediaGridRenderer';
+import { ICON_FOLDER, ICON_SHIELD, ICON_ALERT } from './constants';
 
 const CATEGORY_LABELS = { '': '默认', real: '真人', anime: '动漫' };
 
@@ -107,6 +108,9 @@ class SidePanelApp {
     this.bossOverlay.classList.toggle('active', this.bossMode);
     this.bossKeyBtn.classList.toggle('boss-active', this.bossMode);
     this.statusBoss.style.display = this.bossMode ? 'inline-flex' : 'none';
+    if (this.bossMode) {
+      this.statusBoss.innerHTML = `${ICON_SHIELD} 隐私模式`;
+    }
   }
 
   toggleStats() {
@@ -238,7 +242,7 @@ class SidePanelApp {
   updateStatusCategory() {
     const value = this.downloadCategorySelect.value;
     const label = CATEGORY_LABELS[value] || value;
-    this.statusCategory.textContent = `📁 ${label}`;
+    this.statusCategory.innerHTML = `${ICON_FOLDER} ${label}`;
   }
 
   listenForMessages() {
@@ -351,7 +355,7 @@ class SidePanelApp {
 
     const toast = document.createElement('div');
     toast.className = 'x-duplicate-toast';
-    toast.innerHTML = `<span class="x-toast-icon">⚠️</span> ${count} 个文件已下载过，已跳过重复下载`;
+    toast.innerHTML = `<span class="x-toast-icon">${ICON_ALERT}</span> ${count} 个文件已下载过，已跳过重复下载`;
     document.body.appendChild(toast);
 
     requestAnimationFrame(() => {
