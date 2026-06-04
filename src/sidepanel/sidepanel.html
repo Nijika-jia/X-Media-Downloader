@@ -18,6 +18,7 @@
       </label>
       <button class="x-icon-btn" id="x-select-all-btn" title="全选">全选</button>
       <button class="x-icon-btn primary" id="x-download-selected-btn" title="下载选中">下载选中</button>
+      <button class="x-icon-btn" id="x-stats-btn" title="统计">📊</button>
       <button class="x-icon-btn" id="x-boss-key-btn" title="老板键 (Esc)">🛡️</button>
       <button class="x-icon-btn" id="x-clear-btn" title="清空列表">清空</button>
     </div>
@@ -54,6 +55,40 @@
     </span>
     <span class="x-status-item" id="x-status-category">📁 默认</span>
     <span class="x-status-item x-status-boss" id="x-status-boss" style="display:none;">🛡️ 隐私模式</span>
+  </div>
+
+  <div class="x-stats-panel" id="x-stats-panel">
+    <div class="x-stats-header">
+      <span class="x-stats-title">下载统计</span>
+      <button class="x-stats-close" id="x-stats-close">✕</button>
+    </div>
+    <div class="x-stats-body">
+      <div class="x-stats-summary">
+        <div class="x-stat-card">
+          <div class="x-stat-value" id="x-stat-total">0</div>
+          <div class="x-stat-label">累计下载</div>
+        </div>
+        <div class="x-stat-card x-stat-card-photo">
+          <div class="x-stat-value" id="x-stat-photos">0</div>
+          <div class="x-stat-label">图片</div>
+        </div>
+        <div class="x-stat-card x-stat-card-video">
+          <div class="x-stat-value" id="x-stat-videos">0</div>
+          <div class="x-stat-label">视频</div>
+        </div>
+      </div>
+      <div class="x-stats-section">
+        <div class="x-stats-section-title">下载活跃度</div>
+        <div class="x-heatmap" id="x-stats-heatmap">
+          <div class="x-heatmap-months" id="x-heatmap-months"></div>
+          <div class="x-heatmap-grid" id="x-heatmap-grid"></div>
+        </div>
+      </div>
+      <div class="x-stats-section">
+        <div class="x-stats-section-title">本次会话</div>
+        <div class="x-stats-session" id="x-stats-session"></div>
+      </div>
+    </div>
   </div>
 
   <div class="x-boss-overlay" id="x-boss-overlay">

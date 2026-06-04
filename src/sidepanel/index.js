@@ -11,6 +11,7 @@ class SidePanelApp {
     this.portReconnectTimer = null;
     this.bossMode = false;
     this.connected = false;
+    this.sessionStats = { captured: 0, downloaded: 0, photos: 0, videos: 0 };
 
     this.cacheElements();
     this.bindEvents();
@@ -32,6 +33,9 @@ class SidePanelApp {
     this.statusConnection = document.getElementById('x-status-connection');
     this.statusCategory = document.getElementById('x-status-category');
     this.statusBoss = document.getElementById('x-status-boss');
+    this.statsBtn = document.getElementById('x-stats-btn');
+    this.statsPanel = document.getElementById('x-stats-panel');
+    this.statsClose = document.getElementById('x-stats-close');
   }
 
   bindEvents() {
@@ -82,13 +86,20 @@ class SidePanelApp {
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        this.toggleBossMode();
+        if (this.statsPanel.classList.contains('open')) {
+          this.closeStats();
+        } else {
+          this.toggleBossMode();
+        }
       }
     });
 
     this.downloadCategorySelect.addEventListener('change', () => {
       this.updateStatusCategory();
     });
+
+    this.statsBtn.addEventListener('click', () => this.toggleStats());
+    this.statsClose.addEventListener('click', () => this.closeStats());
   }
 
   toggleBossMode() {
@@ -96,6 +107,119 @@ class SidePanelApp {
     this.bossOverlay.classList.toggle('active', this.bossMode);
     this.bossKeyBtn.classList.toggle('boss-active', this.bossMode);
     this.statusBoss.style.display = this.bossMode ? 'inline-flex' : 'none';
+  }
+
+  toggleStats() {
+    if (this.statsPanel.classList.contains('open')) {
+      this.closeStats();
+    } else {
+      this.openStats();
+    }
+  }
+
+  openStats() {
+    this.statsPanel.classList.add('open');
+    this.loadStats();
+  }
+
+  closeStats() {
+    this.statsPanel.classList.remove('open');
+  }
+
+  async loadStats() {
+    try {
+      const stats = await chrome.runtime.sendMessage({ action: 'get_stats' });
+      if (stats) {
+        this.renderStats(stats);
+      }
+    } catch (e) {}
+  }
+
+  renderStats(stats) {
+    document.getElementById('x-stat-total').textContent = stats.total;
+    document.getElementById('x-stat-photos').textContent = stats.photos;
+    document.getElementById('x-stat-videos').textContent = stats.videos;
+
+    this.renderHeatmap(stats);
+
+    const counts = this.mediaStore.getCounts();
+    const sessionEl = document.getElementById('x-stats-session');
+    sessionEl.innerHTML = `
+      <div class="x-session-row"><span>捕获媒体</span><span>${counts.total}</span></div>
+      <div class="x-session-row"><span>已下载</span><span>${counts.downloaded}</span></div>
+      <div class="x-session-row"><span>未下载</span><span>${counts.notDownloaded}</span></div>
+      <div class="x-session-row"><span>图片</span><span>${counts.photos}</span></div>
+      <div class="x-session-row"><span>视频</span><span>${counts.videos}</span></div>
+    `;
+  }
+
+  renderHeatmap(stats) {
+    const grid = document.getElementById('x-heatmap-grid');
+    const monthsEl = document.getElementById('x-heatmap-months');
+    const maxCount = stats.maxCount || 1;
+
+    // 月份标签
+    const MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    monthsEl.innerHTML = stats.monthLabels.map(m => {
+      if (!m) return '<span class="x-heatmap-month-spacer"></span>';
+      return `<span class="x-heatmap-month">${MONTH_NAMES[m.month]}</span>`;
+    }).join('');
+
+    // 格子
+    grid.innerHTML = stats.weeks.map(week => {
+      const cells = week.map(day => {
+        if (day.future) {
+          return `<span class="x-heatmap-cell future" data-date="${day.date}" data-count="0"></span>`;
+        }
+        const level = day.count === 0 ? 0
+          : day.count <= maxCount * 0.25 ? 1
+          : day.count <= maxCount * 0.5 ? 2
+          : day.count <= maxCount * 0.75 ? 3
+          : 4;
+        return `<span class="x-heatmap-cell l${level}" data-date="${day.date}" data-count="${day.count}"></span>`;
+      }).join('');
+      return `<div class="x-heatmap-col">${cells}</div>`;
+    }).join('');
+
+    // 悬浮提示
+    this.bindHeatmapTooltip(grid);
+  }
+
+  bindHeatmapTooltip(grid) {
+    let tooltip = document.getElementById('x-heatmap-tooltip');
+    if (!tooltip) {
+      tooltip = document.createElement('div');
+      tooltip.id = 'x-heatmap-tooltip';
+      tooltip.className = 'x-heatmap-tooltip';
+      document.body.appendChild(tooltip);
+    }
+
+    grid.addEventListener('mouseover', (e) => {
+      const cell = e.target.closest('.x-heatmap-cell');
+      if (!cell || cell.classList.contains('future')) return;
+
+      const date = cell.dataset.date;
+      const count = cell.dataset.count;
+      tooltip.innerHTML = `<strong>${count} 次下载</strong><br>${date}`;
+      tooltip.classList.add('visible');
+    });
+
+    grid.addEventListener('mousemove', (e) => {
+      if (!tooltip.classList.contains('visible')) return;
+      const x = e.clientX;
+      const y = e.clientY;
+      const tw = tooltip.offsetWidth;
+      const th = tooltip.offsetHeight;
+      tooltip.style.left = `${x - tw / 2}px`;
+      tooltip.style.top = `${y - th - 10}px`;
+    });
+
+    grid.addEventListener('mouseout', (e) => {
+      const cell = e.target.closest('.x-heatmap-cell');
+      if (cell) {
+        tooltip.classList.remove('visible');
+      }
+    });
   }
 
   updateConnectionStatus(connected) {

@@ -108,6 +108,13 @@ class Application {
       return;
     }
 
+    if (message.action === 'get_stats') {
+      let historyService = this.getService('history');
+      let result = await historyService.getStats();
+      sendResponse(result);
+      return;
+    }
+
     if (message.action === 'media_intercepted') {
       let mediaService = this.getService('media');
       if (mediaService && mediaService.broadcast) {
