@@ -7,41 +7,64 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::-webkit-scrollbar {
   width: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #000;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: #2f3336;
   border-radius: 4px;
+  border: 2px solid #000;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #536471;
 }
 
 .x-sidebar-header {
-  padding: 12px 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid #2f3336;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #000;
+  gap: 10px;
+  background: linear-gradient(180deg, #0a0a0a 0%, #000 100%);
   flex-shrink: 0;
   position: sticky;
   top: 0;
   z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.x-sidebar-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e7e9ea;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.x-sidebar-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .x-sidebar-filters {
-  padding: 8px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid #2f3336;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   background: #000;
   flex-shrink: 0;
   position: sticky;
@@ -51,18 +74,19 @@ body {
 
 .x-filter-group {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   background: #16181c;
-  padding: 2px;
+  padding: 3px;
   border-radius: 9999px;
   border: 1px solid #2f3336;
+  flex-wrap: wrap;
 }
 
 .x-filter-btn {
   background: transparent;
   border: none;
   color: #71767b;
-  padding: 4px 12px;
+  padding: 5px 12px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -78,6 +102,7 @@ body {
 .x-filter-btn.active {
   background: #1d9bf0;
   color: #fff;
+  box-shadow: 0 1px 3px rgba(29, 155, 240, 0.4);
 }
 
 .x-view-toggle {
@@ -130,20 +155,6 @@ input:checked + .x-slider:before {
   transform: translateX(14px);
 }
 
-.x-sidebar-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #e7e9ea;
-}
-
-.x-sidebar-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .x-folder-picker {
   display: flex;
   align-items: center;
@@ -175,7 +186,7 @@ input:checked + .x-slider:before {
   color: #eff3f4;
   cursor: pointer;
   font-size: 13px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 9999px;
   transition: all 0.2s ease;
   display: flex;
@@ -191,15 +202,17 @@ input:checked + .x-slider:before {
 .x-icon-btn.primary {
   color: #1d9bf0;
   border: 1px solid #536471;
+  background: rgba(29, 155, 240, 0.05);
 }
 
 .x-icon-btn.primary:hover {
-  background: rgba(29, 155, 240, 0.1);
+  background: rgba(29, 155, 240, 0.15);
   border-color: #1d9bf0;
+  box-shadow: 0 1px 3px rgba(29, 155, 240, 0.3);
 }
 
 .x-icon-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
   border-color: transparent;
 }
@@ -207,32 +220,43 @@ input:checked + .x-slider:before {
 .x-sidebar-content {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 14px;
 }
 
 .x-media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(110px, 28vw, 200px), 1fr));
+  gap: 10px;
 }
 
 .x-media-item {
   position: relative;
   aspect-ratio: 1;
   background: #16181c;
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
   border: 1px solid #2f3336;
-  transition: transform 0.2s, border-color 0.2s;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
 }
 
 .x-media-item:hover {
   border-color: #536471;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
 }
 
 .x-media-item.selected {
   border-color: #1d9bf0;
-  box-shadow: 0 0 0 1px #1d9bf0;
+  box-shadow: 0 0 0 2px #1d9bf0, 0 6px 20px rgba(29, 155, 240, 0.3);
+}
+
+.x-media-item.downloaded {
+  border-color: rgba(0, 186, 124, 0.4);
+}
+
+.x-media-item.downloaded:hover {
+  border-color: #00ba7c;
+  box-shadow: 0 6px 20px rgba(0, 186, 124, 0.2);
 }
 
 .x-media-thumb-container {
@@ -273,17 +297,18 @@ body.full-view-mode .x-media-thumb-container img {
   position: absolute;
   bottom: 6px;
   left: 6px;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(2px);
-  padding: 3px 6px;
-  border-radius: 4px;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  padding: 3px 8px;
+  border-radius: 6px;
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 700;
   color: #fff;
   pointer-events: none;
   z-index: 5;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 .x-item-btn {
@@ -337,6 +362,8 @@ body.full-view-mode .x-media-thumb-container img {
   opacity: 0;
   transition: opacity 0.2s;
   z-index: 10;
+  background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 80%, transparent 100%);
+  padding-top: 12px;
 }
 
 .x-media-item:hover .x-dl-actions {
@@ -346,32 +373,23 @@ body.full-view-mode .x-media-thumb-container img {
 .x-dl-action-btn {
   flex: 1;
   border: none;
-  background: rgba(0, 0, 0, 0.75);
+  background: transparent;
   backdrop-filter: blur(4px);
   color: #e7e9ea;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 6px 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 0 10px 0;
   cursor: pointer;
-  transition: background 0.15s;
-  letter-spacing: 0.3px;
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
 }
 
 .x-dl-action-btn:not(:last-child) {
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.x-dl-action-btn:first-child {
-  border-radius: 0;
-}
-
-.x-dl-action-btn:last-child {
-  border-radius: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .x-dl-action-btn:hover {
-  background: #1d9bf0;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .x-dl-cat-0 {
@@ -446,16 +464,17 @@ body.full-view-mode .x-media-thumb-container img {
   top: 6px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 186, 124, 0.85);
+  background: linear-gradient(135deg, #00ba7c 0%, #00875a 100%);
   backdrop-filter: blur(2px);
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 3px 10px;
+  border-radius: 6px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   color: #fff;
   pointer-events: none;
   z-index: 5;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+  box-shadow: 0 2px 6px rgba(0, 186, 124, 0.4);
 }
 
 .x-duplicate-toast {
@@ -536,12 +555,12 @@ body.full-view-mode .x-media-thumb-container img {
 }
 
 .x-status-bar {
-  padding: 6px 16px;
+  padding: 8px 16px;
   border-top: 1px solid #2f3336;
   display: flex;
   align-items: center;
   gap: 16px;
-  background: #000;
+  background: linear-gradient(180deg, #000 0%, #0a0a0a 100%);
   flex-shrink: 0;
   font-size: 11px;
   color: #71767b;
@@ -580,7 +599,7 @@ body.full-view-mode .x-media-thumb-container img {
   position: fixed;
   top: 0;
   right: -360px;
-  width: 340px;
+  width: min(340px, 100%);
   height: 100vh;
   background: #000;
   border-left: 1px solid #2f3336;
@@ -639,23 +658,31 @@ body.full-view-mode .x-media-thumb-container img {
 }
 
 .x-stat-card {
-  background: #16181c;
+  background: linear-gradient(180deg, #16181c 0%, #0a0a0a 100%);
   border: 1px solid #2f3336;
-  border-radius: 10px;
-  padding: 12px 8px;
+  border-radius: 12px;
+  padding: 14px 8px;
   text-align: center;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.x-stat-card:hover {
+  transform: translateY(-2px);
+  border-color: #536471;
 }
 
 .x-stat-value {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 800;
   color: #e7e9ea;
+  letter-spacing: -0.5px;
 }
 
 .x-stat-label {
   font-size: 11px;
   color: #71767b;
   margin-top: 4px;
+  font-weight: 600;
 }
 
 .x-stat-card-photo .x-stat-value {
@@ -815,4 +842,155 @@ body.full-view-mode .x-media-thumb-container img {
 .x-session-row span:last-child {
   font-weight: 600;
   color: #1d9bf0;
+}
+
+/* Settings Panel */
+.x-settings-panel {
+  position: fixed;
+  top: 0;
+  right: -360px;
+  width: min(340px, 100%);
+  height: 100vh;
+  background: #000;
+  border-left: 1px solid #2f3336;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  transition: right 0.25s ease;
+}
+
+.x-settings-panel.open {
+  right: 0;
+}
+
+.x-settings-section {
+  margin-bottom: 18px;
+}
+
+.x-settings-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #71767b;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.x-settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  background: #16181c;
+  border: 1px solid #2f3336;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.x-settings-row-info {
+  flex: 1;
+}
+
+.x-settings-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e7e9ea;
+  margin-bottom: 4px;
+}
+
+.x-settings-row-desc {
+  font-size: 11px;
+  color: #71767b;
+  line-height: 1.5;
+}
+
+.x-settings-tip {
+  background: #16181c;
+  border: 1px solid #2f3336;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 11px;
+  color: #71767b;
+  line-height: 1.7;
+}
+
+/* ============ 响应式适配 ============ */
+
+/* 窄屏：隐藏按钮文字，只保留图标 */
+@media (max-width: 380px) {
+  .x-sidebar-header {
+    padding: 10px 10px;
+    gap: 6px;
+  }
+  .x-sidebar-title {
+    font-size: 14px;
+  }
+  .x-sidebar-title #x-count {
+    display: none;
+  }
+  .x-icon-btn {
+    padding: 6px 8px;
+    font-size: 0;
+  }
+  .x-icon-btn svg {
+    margin: 0;
+  }
+  .x-folder-picker span {
+    display: none;
+  }
+  .x-folder-picker select {
+    padding: 5px 22px 5px 8px;
+    font-size: 11px;
+  }
+  .x-sidebar-filters {
+    padding: 8px 10px;
+    top: 49px;
+  }
+  .x-filter-btn {
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+  .x-sidebar-content {
+    padding: 10px;
+  }
+  .x-media-grid {
+    gap: 8px;
+  }
+  .x-status-bar {
+    padding: 6px 10px;
+    gap: 10px;
+    font-size: 10px;
+  }
+}
+
+/* 极窄屏：筛选栏垂直排列 */
+@media (max-width: 300px) {
+  .x-sidebar-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .x-filter-group {
+    justify-content: center;
+  }
+  .x-view-toggle {
+    justify-content: center;
+  }
+}
+
+/* 宽屏：限制网格最大列宽，避免卡片过大 */
+@media (min-width: 600px) {
+  .x-media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+  }
+}
+
+@media (min-width: 900px) {
+  .x-media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .x-sidebar-content {
+    padding: 18px;
+  }
 }

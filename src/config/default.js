@@ -9,5 +9,8 @@ export default {
   multipleDownloadsGapTime: 150,
   disableDownloadsShelf: false,
   enableSaveDownloadHistory: true,
-  maxHistoryItems: 10000
+  maxHistoryItems: 10000,
+  dedupByThumb: false,
+  dedupByPhash: false,
+  clickToOpen: false
 };

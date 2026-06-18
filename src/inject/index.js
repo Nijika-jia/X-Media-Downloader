@@ -2,8 +2,16 @@ function findMedia(obj, found = []) {
   if (!obj || typeof obj !== 'object') return found;
 
   if (obj.extended_entities && obj.extended_entities.media) {
+    // 捕获所在推文的 URL
+    let tweetUrl = '';
+    if (obj.entities && obj.entities.media && obj.entities.media.length > 0) {
+      tweetUrl = obj.entities.media[0].expanded_url || '';
+    } else if (obj.url) {
+      tweetUrl = obj.url;
+    }
+
     obj.extended_entities.media.forEach(media => {
-      found.push(formatMedia(media));
+      found.push(formatMedia(media, tweetUrl));
     });
   }
 
@@ -13,7 +21,7 @@ function findMedia(obj, found = []) {
   return found;
 }
 
-function formatMedia(media) {
+function formatMedia(media, tweetUrl = '') {
   let type = media.type;
   let url = media.media_url_https;
   let variants = [];
@@ -45,6 +53,7 @@ function formatMedia(media) {
     type: type,
     url: url,
     thumb: media.media_url_https,
+    tweetUrl: tweetUrl || (media.expanded_url || media.url || ''),
     variants: variants,
     timestamp: Date.now()
   };

@@ -7,6 +7,12 @@ class MediaGridRenderer {
     this.currentFilter = 'all';
     this.onDownload = null;
     this.onShowLightbox = null;
+    this.onOpenUrl = null;
+    this.clickToOpen = false;
+  }
+
+  setClickToOpen(enabled) {
+    this.clickToOpen = !!enabled;
   }
 
   render() {
@@ -62,7 +68,9 @@ class MediaGridRenderer {
     const thumbContainer = div.querySelector('.x-media-thumb-container');
     thumbContainer.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (this.onShowLightbox) {
+      if (this.clickToOpen && this.onOpenUrl) {
+        this.onOpenUrl(item);
+      } else if (this.onShowLightbox) {
         this.onShowLightbox(item);
       }
     });

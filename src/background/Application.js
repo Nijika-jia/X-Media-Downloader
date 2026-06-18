@@ -103,7 +103,7 @@ class Application {
 
     if (message.action === 'check_history') {
       let historyService = this.getService('history');
-      let result = await historyService.checkDownloaded(message.ids);
+      let result = await historyService.checkDownloaded(message.ids, message.items || null);
       sendResponse(result);
       return;
     }
@@ -112,6 +112,19 @@ class Application {
       let historyService = this.getService('history');
       let result = await historyService.getStats();
       sendResponse(result);
+      return;
+    }
+
+    if (message.action === 'get_settings') {
+      sendResponse(this.settings);
+      return;
+    }
+
+    if (message.action === 'update_settings') {
+      let settingService = this.getService('setting');
+      this.settings = Object.assign({}, this.settings, message.settings);
+      await settingService.updateSettings(this.settings);
+      sendResponse({ ok: true });
       return;
     }
 

@@ -53,7 +53,7 @@ class DownloadService extends AbstractService {
     const newItems = [];
 
     for (const item of items) {
-      const exists = await historyService.hasItem(item.id);
+      const exists = await historyService.hasItem(item.id, item.thumb, item.phash);
       if (exists) {
         duplicates.push(item);
       } else {

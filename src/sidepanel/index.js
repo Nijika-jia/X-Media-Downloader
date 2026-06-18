@@ -1,6 +1,7 @@
 import MediaStore from './MediaStore';
 import MediaGridRenderer from './MediaGridRenderer';
 import { ICON_FOLDER, ICON_SHIELD, ICON_ALERT } from './constants';
+import { computePHash } from './phash';
 
 const CATEGORY_LABELS = { '': '默认', real: '真人', anime: '动漫' };
 
@@ -18,6 +19,7 @@ class SidePanelApp {
     this.bindEvents();
     this.listenForMessages();
     this.connectPort();
+    this.loadSettings();
   }
 
   cacheElements() {
@@ -29,6 +31,7 @@ class SidePanelApp {
     this.emptyState = document.getElementById('x-empty-state');
     this.filterBtns = document.querySelectorAll('.x-filter-btn');
     this.fullViewToggle = document.getElementById('x-full-view-toggle');
+    this.clickOpenToggle = document.getElementById('x-click-open-toggle');
     this.bossKeyBtn = document.getElementById('x-boss-key-btn');
     this.bossOverlay = document.getElementById('x-boss-overlay');
     this.statusConnection = document.getElementById('x-status-connection');
@@ -37,11 +40,44 @@ class SidePanelApp {
     this.statsBtn = document.getElementById('x-stats-btn');
     this.statsPanel = document.getElementById('x-stats-panel');
     this.statsClose = document.getElementById('x-stats-close');
+    this.settingsBtn = document.getElementById('x-settings-btn');
+    this.settingsPanel = document.getElementById('x-settings-panel');
+    this.settingsClose = document.getElementById('x-settings-close');
+    this.dedupByThumbToggle = document.getElementById('x-dedup-by-thumb');
+    this.dedupByPhashToggle = document.getElementById('x-dedup-by-phash');
+  }
+
+  async loadSettings() {
+    try {
+      const settings = await chrome.runtime.sendMessage({ action: 'get_settings' });
+      if (settings) {
+        if (this.dedupByThumbToggle) {
+          this.dedupByThumbToggle.checked = !!settings.dedupByThumb;
+        }
+        if (this.dedupByPhashToggle) {
+          this.dedupByPhashToggle.checked = !!settings.dedupByPhash;
+        }
+        if (this.clickOpenToggle) {
+          this.clickOpenToggle.checked = !!settings.clickToOpen;
+          this.renderer.setClickToOpen(this.clickOpenToggle.checked);
+        }
+      }
+    } catch (e) {}
+  }
+
+  async updateSettings(patch) {
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'update_settings',
+        settings: patch
+      });
+    } catch (e) {}
   }
 
   bindEvents() {
     this.renderer.onDownload = (items, category) => this.downloadItems(items, category || this.downloadCategorySelect.value);
     this.renderer.onShowLightbox = (item) => this.showLightbox(item);
+    this.renderer.onOpenUrl = (item) => this.openTweetUrl(item);
 
     this.mediaStore.addListener((event) => {
       this.updateCount();
@@ -60,6 +96,13 @@ class SidePanelApp {
     this.fullViewToggle.addEventListener('change', (e) => {
       document.body.classList.toggle('full-view-mode', e.target.checked);
     });
+
+    if (this.clickOpenToggle) {
+      this.clickOpenToggle.addEventListener('change', (e) => {
+        this.renderer.setClickToOpen(e.target.checked);
+        this.updateSettings({ clickToOpen: e.target.checked });
+      });
+    }
 
     this.selectAllBtn.addEventListener('click', () => {
       const visibleIds = Array.from(document.querySelectorAll('.x-media-item'))
@@ -89,6 +132,8 @@ class SidePanelApp {
       if (e.key === 'Escape') {
         if (this.statsPanel.classList.contains('open')) {
           this.closeStats();
+        } else if (this.settingsPanel && this.settingsPanel.classList.contains('open')) {
+          this.closeSettings();
         } else {
           this.toggleBossMode();
         }
@@ -101,6 +146,73 @@ class SidePanelApp {
 
     this.statsBtn.addEventListener('click', () => this.toggleStats());
     this.statsClose.addEventListener('click', () => this.closeStats());
+
+    if (this.settingsBtn) {
+      this.settingsBtn.addEventListener('click', () => this.toggleSettings());
+    }
+    if (this.settingsClose) {
+      this.settingsClose.addEventListener('click', () => this.closeSettings());
+    }
+    if (this.dedupByThumbToggle) {
+      this.dedupByThumbToggle.addEventListener('change', (e) => {
+        this.updateSettings({ dedupByThumb: e.target.checked });
+        if (e.target.checked) {
+          this.showInfoToast('已开启封面去重，新下载会按封面识别重复');
+        } else {
+          this.showInfoToast('已关闭封面去重');
+        }
+      });
+    }
+    if (this.dedupByPhashToggle) {
+      this.dedupByPhashToggle.addEventListener('change', (e) => {
+        this.updateSettings({ dedupByPhash: e.target.checked });
+        if (e.target.checked) {
+          this.showInfoToast('已开启感知哈希去重，能识别盗图/压缩图/截图');
+          // 重新检查现有媒体
+          setTimeout(() => this.checkHistoryForNewItems(), 500);
+        } else {
+          this.showInfoToast('已关闭感知哈希去重');
+        }
+      });
+    }
+  }
+
+  toggleSettings() {
+    if (this.settingsPanel.classList.contains('open')) {
+      this.closeSettings();
+    } else {
+      this.openSettings();
+    }
+  }
+
+  openSettings() {
+    this.settingsPanel.classList.add('open');
+    this.loadSettings();
+  }
+
+  closeSettings() {
+    this.settingsPanel.classList.remove('open');
+  }
+
+  showInfoToast(text) {
+    const existing = document.querySelector('.x-duplicate-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'x-duplicate-toast';
+    toast.style.background = 'rgba(29, 155, 240, 0.92)';
+    toast.style.color = '#fff';
+    toast.textContent = text;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+      toast.classList.add('show');
+    });
+
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 2500);
   }
 
   toggleBossMode() {
@@ -291,17 +403,43 @@ class SidePanelApp {
       await this.checkHistoryForNewItems();
       this.renderer.render();
       this.emptyState.style.display = 'none';
+
+      // 异步计算 pHash（如果开启）
+      this.computePhashForItems(items);
     }
   }
 
+  async computePhashForItems(items) {
+    try {
+      const settings = await chrome.runtime.sendMessage({ action: 'get_settings' });
+      if (!settings || !settings.dedupByPhash) return;
+
+      // 只对图片计算 pHash（视频用封面图）
+      const photoItems = items.filter(i => i.type === 'photo' || i.type === 'video' || i.type === 'animated_gif');
+      for (const item of photoItems) {
+        const thumbUrl = item.thumb || item.url;
+        const phash = await computePHash(thumbUrl);
+        if (phash) {
+          // 存到 mediaStore
+          const storeItem = this.mediaStore.getItem(item.id);
+          if (storeItem) {
+            storeItem.phash = phash;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   async checkHistoryForNewItems() {
-    const allIds = this.mediaStore.getAllItems().map(i => i.id);
+    const allItems = this.mediaStore.getAllItems();
+    const allIds = allItems.map(i => i.id);
     if (allIds.length === 0) return;
 
     try {
       const result = await chrome.runtime.sendMessage({
         action: 'check_history',
-        ids: allIds
+        ids: allIds,
+        items: allItems
       });
 
       if (result) {
@@ -313,6 +451,8 @@ class SidePanelApp {
         }
         if (downloadedIds.length > 0) {
           this.mediaStore.markDownloaded(downloadedIds);
+          // 重新渲染以显示已下载状态
+          this.renderer.render();
         }
       }
     } catch (e) {}
@@ -320,9 +460,15 @@ class SidePanelApp {
 
   async downloadItems(items, category = '') {
     try {
+      // 附加 pHash（如果已计算）
+      const itemsWithPhash = items.map(item => {
+        const storeItem = this.mediaStore.getItem(item.id);
+        return storeItem && storeItem.phash ? { ...item, phash: storeItem.phash } : item;
+      });
+
       const result = await chrome.runtime.sendMessage({
         action: 'download_media',
-        items: items,
+        items: itemsWithPhash,
         category: category
       });
 
@@ -377,6 +523,13 @@ class SidePanelApp {
         window.open(item.url, '_blank');
       });
     } else {
+      window.open(item.url, '_blank');
+    }
+  }
+
+  openTweetUrl(item) {
+    // 直接在新标签页打开媒体本身（类似右键图片"在新标签页打开"）
+    if (item.url) {
       window.open(item.url, '_blank');
     }
   }

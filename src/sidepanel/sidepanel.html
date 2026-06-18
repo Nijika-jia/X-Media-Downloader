@@ -19,6 +19,7 @@
       <button class="x-icon-btn" id="x-select-all-btn" title="全选">全选</button>
       <button class="x-icon-btn primary" id="x-download-selected-btn" title="下载选中">下载选中</button>
       <button class="x-icon-btn" id="x-stats-btn" title="统计"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg></button>
+      <button class="x-icon-btn" id="x-settings-btn" title="设置"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
       <button class="x-icon-btn" id="x-boss-key-btn" title="老板键 (Esc)"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></button>
       <button class="x-icon-btn" id="x-clear-btn" title="清空列表">清空</button>
     </div>
@@ -31,6 +32,13 @@
       <button class="x-filter-btn" data-filter="video">视频</button>
       <button class="x-filter-btn" data-filter="downloaded">已下载</button>
       <button class="x-filter-btn" data-filter="not_downloaded">未下载</button>
+    </div>
+    <div class="x-view-toggle">
+      <label class="x-toggle-switch" title="开启后点击缩略图直接在新标签页打开媒体">
+        <input type="checkbox" id="x-click-open-toggle">
+        <span class="x-slider"></span>
+      </label>
+      <span style="font-size: 12px; color: #71767b; margin-left: 6px;">从新标签页打开</span>
     </div>
     <div class="x-view-toggle">
       <label class="x-toggle-switch" title="切换全图显示">
@@ -96,6 +104,46 @@
       <div class="x-boss-icon"><svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div>
       <div class="x-boss-text">页面找不到了</div>
       <div class="x-boss-hint">请检查 URL 是否正确</div>
+    </div>
+  </div>
+
+  <div class="x-settings-panel" id="x-settings-panel">
+    <div class="x-stats-header">
+      <span class="x-stats-title">设置</span>
+      <button class="x-stats-close" id="x-settings-close">✕</button>
+    </div>
+    <div class="x-stats-body">
+      <div class="x-settings-section">
+              <div class="x-settings-section-title">下载识别</div>
+              <div class="x-settings-row">
+                <div class="x-settings-row-info">
+                  <div class="x-settings-row-name">封面去重</div>
+                  <div class="x-settings-row-desc">按封面图识别重复（不同博主转发同一图也能识别）。可能略耗性能，默认关闭。</div>
+                </div>
+                <label class="x-toggle-switch">
+                  <input type="checkbox" id="x-dedup-by-thumb">
+                  <span class="x-slider"></span>
+                </label>
+              </div>
+              <div class="x-settings-row">
+                <div class="x-settings-row-info">
+                  <div class="x-settings-row-name">感知哈希去重</div>
+                  <div class="x-settings-row-desc">基于图片内容计算指纹，能识别盗图、压缩图、截图等。性能开销较大（每张图约 50-100ms），默认关闭。</div>
+                </div>
+                <label class="x-toggle-switch">
+                  <input type="checkbox" id="x-dedup-by-phash">
+                  <span class="x-slider"></span>
+                </label>
+              </div>
+            </div>
+      <div class="x-settings-section">
+        <div class="x-settings-section-title">说明</div>
+        <div class="x-settings-tip">
+          默认使用媒体 ID 识别重复（同一推文内的同一媒体）。<br>
+          开启"封面去重"后，会按封面图 URL 识别（不同推文但同一图片也会被标记为已下载）。<br>
+          历史记录持久化在 chrome.storage.local，关闭浏览器不丢失。
+        </div>
+      </div>
     </div>
   </div>
 
