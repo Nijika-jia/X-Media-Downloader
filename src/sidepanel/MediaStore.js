@@ -51,6 +51,14 @@ class MediaStore {
     this.notifyListeners('items_updated');
   }
 
+  removeItems(ids) {
+    ids.forEach(id => {
+      this.mediaMap.delete(id);
+      this.selectedIds.delete(id);
+    });
+    this.notifyListeners('items_removed');
+  }
+
   selectItem(id, selected) {
     if (selected) {
       this.selectedIds.add(id);

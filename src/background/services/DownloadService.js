@@ -44,6 +44,7 @@ class DownloadService extends AbstractService {
     const categoryFolders = this.application.settings.categoryFolders || {};
     const subFolder = categoryFolders[category];
     const baseFolder = this.application.settings.downloadFolder || 'X_Downloads';
+    // 如果 category 有对应的文件夹映射就用，否则直接用 baseFolder
     return subFolder ? `${baseFolder}/${subFolder}` : baseFolder;
   }
 

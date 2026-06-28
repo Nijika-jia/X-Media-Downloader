@@ -5,6 +5,11 @@ export default {
     real: '真人',
     anime: '动漫'
   },
+  usePresets: true,
+  customCategories: [
+    { value: 'real', label: '真人' },
+    { value: 'anime', label: '动漫' }
+  ],
   autoOpenSidePanel: true,
   multipleDownloadsGapTime: 150,
   disableDownloadsShelf: false,
@@ -12,5 +17,6 @@ export default {
   maxHistoryItems: 10000,
   dedupByThumb: false,
   dedupByPhash: false,
-  clickToOpen: false
+  clickToOpen: false,
+  fullViewMode: false
 };

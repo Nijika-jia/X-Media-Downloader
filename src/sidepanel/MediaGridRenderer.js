@@ -1,4 +1,8 @@
-import { ICON_SELECT, ICON_CHECK, DOWNLOAD_CATEGORIES } from './constants';
+import { ICON_SELECT, ICON_CHECK } from './constants';
+
+const ICON_DELETE = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+
+const ICON_DOWNLOAD_SINGLE = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
 
 class MediaGridRenderer {
   constructor(mediaStore) {
@@ -8,11 +12,23 @@ class MediaGridRenderer {
     this.onDownload = null;
     this.onShowLightbox = null;
     this.onOpenUrl = null;
+    this.onDeleteItem = null;
     this.clickToOpen = false;
+    this.usePresets = true;
+    this.categories = [
+      { value: 'real', label: '真人' },
+      { value: 'anime', label: '动漫' }
+    ];
   }
 
   setClickToOpen(enabled) {
     this.clickToOpen = !!enabled;
+  }
+
+  setCategories(usePresets, categories) {
+    this.usePresets = !!usePresets;
+    this.categories = categories || [];
+    this.render();
   }
 
   render() {
@@ -38,6 +54,18 @@ class MediaGridRenderer {
     const isSelected = this.mediaStore.selectedIds.has(item.id);
     const selectTitle = isSelected ? '取消选择' : '选择';
 
+    // 生成下载按钮
+    let downloadButtonsHtml = '';
+    if (this.usePresets && this.categories.length > 0) {
+      downloadButtonsHtml = `<div class="x-dl-actions">
+        ${this.categories.map((cat, i) => `<button class="x-dl-action-btn x-dl-cat-${i}" data-category="${cat.value}" title="下载到${cat.label}">${cat.label}</button>`).join('')}
+      </div>`;
+    } else {
+      downloadButtonsHtml = `<div class="x-dl-actions">
+        <button class="x-dl-action-btn x-dl-cat-0" data-category="" title="下载">下载</button>
+      </div>`;
+    }
+
     div.innerHTML = `
       <div class="x-media-thumb-container">
         <img src="${item.thumb}" loading="lazy">
@@ -45,14 +73,13 @@ class MediaGridRenderer {
       <span class="x-media-type">${item.type}</span>
       ${item.downloaded ? '<span class="x-downloaded-badge">已下载</span>' : ''}
       <div class="x-item-btn x-item-select-btn ${isSelected ? 'selected' : ''}" title="${selectTitle}">${isSelected ? ICON_CHECK : ICON_SELECT}</div>
-      ${item.downloaded ? `<div class="x-item-btn x-item-download-btn downloaded" title="已下载">${ICON_CHECK}</div>` : `
-      <div class="x-dl-actions">
-        ${DOWNLOAD_CATEGORIES.map((cat, i) => `<button class="x-dl-action-btn x-dl-cat-${i}" data-category="${cat.value}" title="下载到${cat.label}">${cat.label}</button>`).join('')}
-      </div>`}
+      <div class="x-item-btn x-item-delete-btn" title="删除">${ICON_DELETE}</div>
+      ${item.downloaded ? `<div class="x-item-btn x-item-download-btn downloaded" title="已下载">${ICON_CHECK}</div>` : downloadButtonsHtml}
     `;
 
     this.bindThumbClick(div, item);
     this.bindSelectClick(div, item);
+    this.bindDeleteClick(div, item);
     if (!item.downloaded) {
       this.bindDownloadActions(div, item);
     }
@@ -93,6 +120,28 @@ class MediaGridRenderer {
       this.mediaStore.selectItem(item.id, newSelected);
       this.updateItemSelection(div, item.id, newSelected);
     });
+  }
+
+  bindDeleteClick(div, item) {
+    const deleteBtn = div.querySelector('.x-item-delete-btn');
+    if (!deleteBtn) return;
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.onDeleteItem) {
+        this.onDeleteItem([item.id]);
+      }
+    });
+  }
+
+  removeItem(id) {
+    const div = this.grid.querySelector(`[data-id="${id}"]`);
+    if (div) {
+      div.remove();
+    }
+  }
+
+  removeItems(ids) {
+    ids.forEach(id => this.removeItem(id));
   }
 
   bindDownloadActions(div, item) {

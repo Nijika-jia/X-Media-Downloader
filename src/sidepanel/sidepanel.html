@@ -11,12 +11,12 @@
       <label class="x-folder-picker" title="选择下载分类">
         <span>保存到</span>
         <select id="x-download-category">
-          <option value="">默认</option>
           <option value="real">真人</option>
           <option value="anime">动漫</option>
         </select>
       </label>
       <button class="x-icon-btn" id="x-select-all-btn" title="全选">全选</button>
+      <button class="x-icon-btn danger" id="x-delete-selected-btn" title="删除选中">删除</button>
       <button class="x-icon-btn primary" id="x-download-selected-btn" title="下载选中">下载选中</button>
       <button class="x-icon-btn" id="x-stats-btn" title="统计"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg></button>
       <button class="x-icon-btn" id="x-settings-btn" title="设置"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
@@ -100,10 +100,78 @@
   </div>
 
   <div class="x-boss-overlay" id="x-boss-overlay">
-    <div class="x-boss-overlay-content">
-      <div class="x-boss-icon"><svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div>
-      <div class="x-boss-text">页面找不到了</div>
-      <div class="x-boss-hint">请检查 URL 是否正确</div>
+    <div class="x-boss-chat-ui">
+      <div class="x-boss-chat-header">
+        <div class="x-boss-chat-header-left">
+          <span class="x-boss-sidebar-logo">AI</span>
+          <span class="x-boss-chat-title">Assistant</span>
+        </div>
+        <button class="x-boss-chat-new-btn" title="New Chat">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        </button>
+      </div>
+      <div class="x-boss-chat-messages">
+        <div class="x-boss-chat-welcome">
+          <div class="x-boss-chat-welcome-icon">AI</div>
+          <div class="x-boss-chat-welcome-title">How can I help you today?</div>
+        </div>
+        <div class="x-boss-msg x-boss-msg-user">
+          <div class="x-boss-msg-avatar x-boss-msg-avatar-user">U</div>
+          <div class="x-boss-msg-bubble x-boss-msg-bubble-user">
+            请帮我解释一下 React 中的 useEffect Hook 是怎么工作的？
+          </div>
+        </div>
+        <div class="x-boss-msg x-boss-msg-ai">
+          <div class="x-boss-msg-avatar x-boss-msg-avatar-ai">AI</div>
+          <div class="x-boss-msg-bubble x-boss-msg-bubble-ai">
+            <p><code>useEffect</code> 是 React 中用于处理副作用的 Hook。它接收两个参数：</p>
+            <p><strong>1. 副作用函数</strong> — 在渲染后执行，可以进行数据获取、订阅、手动 DOM 操作等。</p>
+            <p><strong>2. 依赖数组（可选）</strong> — 控制副作用函数的执行时机：</p>
+            <ul>
+              <li>不传：每次渲染后都执行</li>
+              <li>传空数组 <code>[]</code>：仅在挂载后执行一次</li>
+              <li>传特定变量：当依赖变化时执行</li>
+            </ul>
+            <p>如果副作用函数返回一个函数，它会在组件卸载或下次执行前调用，用于清理操作。</p>
+          </div>
+        </div>
+        <div class="x-boss-msg x-boss-msg-user">
+          <div class="x-boss-msg-avatar x-boss-msg-avatar-user">U</div>
+          <div class="x-boss-msg-bubble x-boss-msg-bubble-user">
+            能给个简单的代码示例吗？
+          </div>
+        </div>
+        <div class="x-boss-msg x-boss-msg-ai">
+          <div class="x-boss-msg-avatar x-boss-msg-avatar-ai">AI</div>
+          <div class="x-boss-msg-bubble x-boss-msg-bubble-ai">
+            <p>当然，这是一个定时器的示例：</p>
+            <pre><code>import { useEffect, useState } from 'react';
+
+function Timer() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCount(c => c + 1);
+    }, 1000);
+    
+    // 清理函数
+    return () => clearInterval(timer);
+  }, []); // 空数组 = 仅挂载时执行
+
+  return &lt;div&gt;{count}&lt;/div&gt;;
+}</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="x-boss-chat-input-area">
+        <div class="x-boss-chat-input-box">
+          <input type="text" placeholder="Send a message..." readonly>
+          <button class="x-boss-chat-send-btn">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -114,7 +182,33 @@
     </div>
     <div class="x-stats-body">
       <div class="x-settings-section">
-              <div class="x-settings-section-title">下载识别</div>
+        <div class="x-settings-section-title">下载分类</div>
+        <div class="x-settings-row">
+          <div class="x-settings-row-info">
+            <div class="x-settings-row-name">使用分类预设</div>
+            <div class="x-settings-row-desc">开启后每张图显示多个分类按钮。关闭后只显示一个"下载"按钮，统一下载到默认路径。</div>
+          </div>
+          <label class="x-toggle-switch">
+            <input type="checkbox" id="x-use-presets">
+            <span class="x-slider"></span>
+          </label>
+        </div>
+        <div id="x-preset-config" class="x-preset-config">
+          <div class="x-preset-row">
+            <label>分类 1</label>
+            <input type="text" id="x-cat-1-label" placeholder="显示名（如：真人）" maxlength="6">
+            <input type="text" id="x-cat-1-folder" placeholder="文件夹名（如：真人）" maxlength="20">
+          </div>
+          <div class="x-preset-row">
+            <label>分类 2</label>
+            <input type="text" id="x-cat-2-label" placeholder="显示名（如：动漫）" maxlength="6">
+            <input type="text" id="x-cat-2-folder" placeholder="文件夹名（如：动漫）" maxlength="20">
+          </div>
+          <button class="x-preset-save-btn" id="x-preset-save-btn">保存预设</button>
+        </div>
+      </div>
+      <div class="x-settings-section">
+        <div class="x-settings-section-title">下载识别</div>
               <div class="x-settings-row">
                 <div class="x-settings-row-info">
                   <div class="x-settings-row-name">封面去重</div>

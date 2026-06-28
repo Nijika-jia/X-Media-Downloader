@@ -25,6 +25,7 @@ class SidePanelApp {
   cacheElements() {
     this.selectAllBtn = document.getElementById('x-select-all-btn');
     this.downloadSelectedBtn = document.getElementById('x-download-selected-btn');
+    this.deleteSelectedBtn = document.getElementById('x-delete-selected-btn');
     this.downloadCategorySelect = document.getElementById('x-download-category');
     this.clearBtn = document.getElementById('x-clear-btn');
     this.countEl = document.getElementById('x-count');
@@ -45,6 +46,13 @@ class SidePanelApp {
     this.settingsClose = document.getElementById('x-settings-close');
     this.dedupByThumbToggle = document.getElementById('x-dedup-by-thumb');
     this.dedupByPhashToggle = document.getElementById('x-dedup-by-phash');
+    this.usePresetsToggle = document.getElementById('x-use-presets');
+    this.presetConfig = document.getElementById('x-preset-config');
+    this.cat1Label = document.getElementById('x-cat-1-label');
+    this.cat1Folder = document.getElementById('x-cat-1-folder');
+    this.cat2Label = document.getElementById('x-cat-2-label');
+    this.cat2Folder = document.getElementById('x-cat-2-folder');
+    this.presetSaveBtn = document.getElementById('x-preset-save-btn');
   }
 
   async loadSettings() {
@@ -61,8 +69,51 @@ class SidePanelApp {
           this.clickOpenToggle.checked = !!settings.clickToOpen;
           this.renderer.setClickToOpen(this.clickOpenToggle.checked);
         }
+        if (this.fullViewToggle) {
+          this.fullViewToggle.checked = !!settings.fullViewMode;
+          document.body.classList.toggle('full-view-mode', this.fullViewToggle.checked);
+        }
+        // 加载预设配置
+        const usePresets = settings.usePresets !== false;
+        if (this.usePresetsToggle) {
+          this.usePresetsToggle.checked = usePresets;
+          this.presetConfig.classList.toggle('hidden', !usePresets);
+        }
+        const categories = settings.customCategories || [
+          { value: 'real', label: '真人' },
+          { value: 'anime', label: '动漫' }
+        ];
+        this.renderer.setCategories(usePresets, categories);
+        // 填充输入框
+        if (categories[0]) {
+          this.cat1Label.value = categories[0].label || '';
+          this.cat1Folder.value = (settings.categoryFolders && settings.categoryFolders[categories[0].value]) || '';
+        }
+        if (categories[1]) {
+          this.cat2Label.value = categories[1].label || '';
+          this.cat2Folder.value = (settings.categoryFolders && settings.categoryFolders[categories[1].value]) || '';
+        }
+        // 更新顶部下拉框
+        this.updateCategorySelect(usePresets, categories, settings.categoryFolders);
       }
     } catch (e) {}
+  }
+
+  updateCategorySelect(usePresets, categories, categoryFolders) {
+    this.downloadCategorySelect.innerHTML = '';
+    if (usePresets && categories && categories.length > 0) {
+      categories.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat.value;
+        opt.textContent = cat.label;
+        this.downloadCategorySelect.appendChild(opt);
+      });
+    } else {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '默认';
+      this.downloadCategorySelect.appendChild(opt);
+    }
   }
 
   async updateSettings(patch) {
@@ -74,10 +125,44 @@ class SidePanelApp {
     } catch (e) {}
   }
 
+  getCurrentCategories() {
+    return [
+      { value: 'cat1', label: this.cat1Label.value || '分类1' },
+      { value: 'cat2', label: this.cat2Label.value || '分类2' }
+    ];
+  }
+
+  async saveCustomPresets() {
+    const label1 = this.cat1Label.value.trim();
+    const folder1 = this.cat1Folder.value.trim();
+    const label2 = this.cat2Label.value.trim();
+    const folder2 = this.cat2Folder.value.trim();
+
+    if (!label1 || !folder1 || !label2 || !folder2) {
+      this.showInfoToast('请填写完整的显示名和文件夹名');
+      return;
+    }
+
+    const categories = [
+      { value: 'cat1', label: label1 },
+      { value: 'cat2', label: label2 }
+    ];
+    const categoryFolders = {
+      cat1: folder1,
+      cat2: folder2
+    };
+
+    await this.updateSettings({ customCategories: categories, categoryFolders });
+    this.renderer.setCategories(true, categories);
+    this.updateCategorySelect(true, categories, categoryFolders);
+    this.showInfoToast('预设已保存');
+  }
+
   bindEvents() {
     this.renderer.onDownload = (items, category) => this.downloadItems(items, category || this.downloadCategorySelect.value);
     this.renderer.onShowLightbox = (item) => this.showLightbox(item);
     this.renderer.onOpenUrl = (item) => this.openTweetUrl(item);
+    this.renderer.onDeleteItem = (ids) => this.deleteItems(ids);
 
     this.mediaStore.addListener((event) => {
       this.updateCount();
@@ -95,6 +180,7 @@ class SidePanelApp {
 
     this.fullViewToggle.addEventListener('change', (e) => {
       document.body.classList.toggle('full-view-mode', e.target.checked);
+      this.updateSettings({ fullViewMode: e.target.checked });
     });
 
     if (this.clickOpenToggle) {
@@ -102,6 +188,22 @@ class SidePanelApp {
         this.renderer.setClickToOpen(e.target.checked);
         this.updateSettings({ clickToOpen: e.target.checked });
       });
+    }
+
+    if (this.usePresetsToggle) {
+      this.usePresetsToggle.addEventListener('change', (e) => {
+        this.presetConfig.classList.toggle('hidden', !e.target.checked);
+        const usePresets = e.target.checked;
+        this.updateSettings({ usePresets });
+        // 立即刷新渲染
+        const categories = this.getCurrentCategories();
+        this.renderer.setCategories(usePresets, categories);
+        this.updateCategorySelect(usePresets, categories, null);
+      });
+    }
+
+    if (this.presetSaveBtn) {
+      this.presetSaveBtn.addEventListener('click', () => this.saveCustomPresets());
     }
 
     this.selectAllBtn.addEventListener('click', () => {
@@ -118,6 +220,15 @@ class SidePanelApp {
       this.downloadItems(items, this.downloadCategorySelect.value);
     });
 
+    if (this.deleteSelectedBtn) {
+      this.deleteSelectedBtn.addEventListener('click', () => {
+        const items = this.mediaStore.getSelectedItems();
+        if (items.length === 0) return;
+        const ids = items.map(i => i.id);
+        this.deleteItems(ids);
+      });
+    }
+
     this.clearBtn.addEventListener('click', () => {
       this.mediaStore.clear();
       this.renderer.grid.innerHTML = '';
@@ -127,6 +238,12 @@ class SidePanelApp {
     });
 
     this.bossKeyBtn.addEventListener('click', () => this.toggleBossMode());
+
+    // 右键任意位置触发隐私模式（快速反应）
+    document.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.toggleBossMode();
+    });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -416,16 +533,22 @@ class SidePanelApp {
 
       // 只对图片计算 pHash（视频用封面图）
       const photoItems = items.filter(i => i.type === 'photo' || i.type === 'video' || i.type === 'animated_gif');
+      let phashChanged = false;
       for (const item of photoItems) {
         const thumbUrl = item.thumb || item.url;
         const phash = await computePHash(thumbUrl);
         if (phash) {
-          // 存到 mediaStore
           const storeItem = this.mediaStore.getItem(item.id);
           if (storeItem) {
             storeItem.phash = phash;
+            phashChanged = true;
           }
         }
+      }
+
+      // pHash 计算完成后，重新检查历史（此时才有 phash 可比对）
+      if (phashChanged) {
+        await this.checkHistoryForNewItems();
       }
     } catch (e) {}
   }
@@ -532,6 +655,18 @@ class SidePanelApp {
     if (item.url) {
       window.open(item.url, '_blank');
     }
+  }
+
+  deleteItems(ids) {
+    if (!ids || ids.length === 0) return;
+    this.mediaStore.removeItems(ids);
+    this.renderer.removeItems(ids);
+    this.updateCount();
+    this.updateSelectionUI();
+    if (this.mediaStore.getAllItems().length === 0) {
+      this.emptyState.style.display = 'block';
+    }
+    this.showInfoToast(`已删除 ${ids.length} 项`);
   }
 
   updateCount() {
