@@ -83,6 +83,7 @@ class SidePanelApp {
           { value: 'real', label: '真人' },
           { value: 'anime', label: '动漫' }
         ];
+        this.currentCategories = categories;
         this.renderer.setCategories(usePresets, categories);
         // 填充输入框
         if (categories[0]) {
@@ -126,9 +127,10 @@ class SidePanelApp {
   }
 
   getCurrentCategories() {
-    return [
-      { value: 'cat1', label: this.cat1Label.value || '分类1' },
-      { value: 'cat2', label: this.cat2Label.value || '分类2' }
+    // 使用已存储的 categories（value 与 categoryFolders 映射一致）
+    return this.currentCategories || [
+      { value: 'real', label: '真人' },
+      { value: 'anime', label: '动漫' }
     ];
   }
 
@@ -153,13 +155,14 @@ class SidePanelApp {
     };
 
     await this.updateSettings({ customCategories: categories, categoryFolders });
+    this.currentCategories = categories;
     this.renderer.setCategories(true, categories);
     this.updateCategorySelect(true, categories, categoryFolders);
     this.showInfoToast('预设已保存');
   }
 
   bindEvents() {
-    this.renderer.onDownload = (items, category) => this.downloadItems(items, category || this.downloadCategorySelect.value);
+    this.renderer.onDownload = (items, category) => this.downloadItems(items, category != null ? category : this.downloadCategorySelect.value);
     this.renderer.onShowLightbox = (item) => this.showLightbox(item);
     this.renderer.onOpenUrl = (item) => this.openTweetUrl(item);
     this.renderer.onDeleteItem = (ids) => this.deleteItems(ids);
