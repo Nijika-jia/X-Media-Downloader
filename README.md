@@ -1,6 +1,7 @@
 <div align="center">
 
 # X-Media Downloader
+<img width="300" height="300" alt="图层 0" src="https://github.com/user-attachments/assets/d6e84380-af4c-49fa-a2d0-d98e47bb1992" />
 
 [English](./README.en.md) | **简体中文**
 
