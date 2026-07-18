@@ -2,6 +2,8 @@
 
 # X-Media Downloader
 
+<img width="300" height="300" alt="图层 0" src="https://github.com/user-attachments/assets/d6e84380-af4c-49fa-a2d0-d98e47bb1992" />
+
 **English** | [简体中文](./README.md)
 
 A powerful Chrome Extension to download images & videos from X.com (Twitter) with a sleek side panel UI.
