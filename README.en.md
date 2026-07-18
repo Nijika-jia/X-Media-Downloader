@@ -48,6 +48,13 @@ A powerful Chrome Extension to download images & videos from X.com (Twitter) wit
 
 All dedup modes are optional toggles in the Settings panel. pHash is the most powerful — it can identify visually identical images even after re-encoding, resizing, or cropping.
 
+### 📥 Download Center (NEW)
+- **Dedicated Tab** — Open a standalone Download Center tab to manage all download tasks
+- **Real-Time Queue** — Track each task's status (Pending / Downloading / Completed / Failed)
+- **Retry Failed** — One-click retry for failed downloads
+- **Diagnostic Panel** — Real-time visibility into `onDeterminingFilename` listener hits, pinpointing why filenames might not take effect
+- **Persistent State** — Task queue and mappings stored in `chrome.storage.session`, survives service worker restarts
+
 ### 📊 Statistics & History
 - **Persistent History** — Download history stored in `chrome.storage.local`, survives browser restarts
 - **Visual Heatmap** — GitHub-style activity heatmap of your download activity
@@ -109,6 +116,7 @@ All settings are available in the Side Panel → Settings (gear icon):
 | **Click-to-Open** | Click thumbnail opens media in new tab | Off |
 | **Full-View Mode** | Show larger thumbnails in the grid | Off |
 | **Download Category** | Default folder category for downloads | Default |
+| **Download Center** | Click side panel button to open standalone download management tab | - |
 
 ---
 
@@ -183,6 +191,10 @@ src/
 │   ├── constants.js           # UI constants & icons
 │   ├── sidepanel.html
 │   └── sidepanel.css
+├── downloadcenter/            # Download Center tab (NEW)
+│   ├── index.js               # DownloadCenterApp controller
+│   ├── downloadcenter.html
+│   └── downloadcenter.css
 ├── popup/                     # Popup page
 ├── config/
 │   └── default.js             # Default settings

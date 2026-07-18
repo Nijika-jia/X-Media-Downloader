@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>媒体浏览 - X Media Downloader</title>
+  <link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+  <div class="g-app">
+    <!-- 左侧缩略图栏 -->
+    <aside class="g-sidebar">
+      <div class="g-sidebar-header">
+        <span class="g-sidebar-title">已捕获</span>
+        <span class="g-sidebar-count" id="g-count">0</span>
+      </div>
+      <div class="g-sidebar-filter">
+        <button class="g-filter-btn active" data-filter="all">全部</button>
+        <button class="g-filter-btn" data-filter="photo">图片</button>
+        <button class="g-filter-btn" data-filter="video">视频</button>
+      </div>
+      <div class="g-thumb-list" id="g-thumb-list"></div>
+      <div class="g-sidebar-empty" id="g-empty">暂无媒体</div>
+    </aside>
+
+    <!-- 右侧详情区 -->
+    <main class="g-main">
+      <div class="g-detail-empty" id="g-detail-empty">
+        <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+        <p>从左侧选择一张媒体查看</p>
+      </div>
+
+      <div class="g-detail" id="g-detail" style="display:none;">
+        <!-- 顶部工具栏 -->
+        <div class="g-detail-toolbar">
+          <span class="g-detail-type" id="g-detail-type"></span>
+          <div class="g-detail-toolbar-actions">
+            <button class="g-tool-btn" id="g-open-tab" title="在新标签页打开">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            </button>
+            <button class="g-tool-btn g-danger" id="g-delete" title="删除">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 大图/视频 -->
+        <div class="g-detail-media" id="g-detail-media"></div>
+
+        <!-- 操作区 -->
+        <div class="g-detail-actions" id="g-detail-actions">
+          <div class="g-action-row">
+            <span class="g-action-label">下载：</span>
+            <div class="g-dl-buttons" id="g-dl-buttons"></div>
+          </div>
+          <div class="g-action-row" id="g-downloaded-badge" style="display:none;">
+            <span class="g-badge-downloaded">✓ 已下载</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="gallery.js"></script>
+</body>
+</html>

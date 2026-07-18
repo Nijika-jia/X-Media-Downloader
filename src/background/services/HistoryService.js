@@ -4,7 +4,9 @@ import AbstractService from './AbstractService';
 const STORAGE_KEY = 'x_download_history';
 const THUMB_INDEX_KEY = 'x_download_thumb_index';
 const PHASH_INDEX_KEY = 'x_download_phash_index';
+const PHASH_CACHE_KEY = 'x_phash_cache'; // 所有已计算 pHash 的缓存（含未下载）
 const PHASH_THRESHOLD = 5; // 汉明距离阈值，<=5 视为同一张图
+const PHASH_CACHE_MAX = 5000;
 
 class HistoryService extends AbstractService {
   static instance;
@@ -40,6 +42,62 @@ class HistoryService extends AbstractService {
     });
   }
 
+  /**
+   * 获取所有已计算的 pHash 缓存（含未下载的项）
+   * 返回 { id: phash } 映射
+   */
+  async getPhashCache() {
+    return new Promise(resolve => {
+      browser.storage.local.get(PHASH_CACHE_KEY, result => {
+        resolve(result[PHASH_CACHE_KEY] || {});
+      });
+    });
+  }
+
+  /**
+   * 批量更新 pHash 缓存
+   * @param {Array<{id, phash}>} items
+   */
+  async updatePhashCache(items) {
+    if (!items || items.length === 0) return;
+    const cache = await this.getPhashCache();
+    items.forEach(item => {
+      if (item.id && item.phash) {
+        cache[item.id] = item.phash;
+      }
+    });
+
+    // 限制缓存大小，保留最新的
+    const entries = Object.entries(cache);
+    if (entries.length > PHASH_CACHE_MAX) {
+      const trimmed = {};
+      entries.slice(-PHASH_CACHE_MAX).forEach(([k, v]) => { trimmed[k] = v; });
+      return new Promise(resolve => {
+        browser.storage.local.set({ [PHASH_CACHE_KEY]: trimmed }, resolve);
+      });
+    }
+
+    return new Promise(resolve => {
+      browser.storage.local.set({ [PHASH_CACHE_KEY]: cache }, resolve);
+    });
+  }
+
+  /**
+   * 批量获取 pHash 缓存
+   * @param {Array<string>} ids
+   * @returns {Object} { id: phash }
+   */
+  async getPhashForIds(ids) {
+    const cache = await this.getPhashCache();
+    const result = {};
+    ids.forEach(id => {
+      if (cache[id]) {
+        result[id] = cache[id];
+      }
+    });
+    return result;
+  }
+
   async getItems(ids) {
     const history = await this.getAll();
     const result = {};
@@ -72,6 +130,51 @@ class HistoryService extends AbstractService {
       }
     }
     return false;
+  }
+
+  /**
+   * 批量检查多个 item 是否已存在（一次性加载索引并在内存中遍历）
+   * 避免 downloadMedia 循环内逐项调用 hasItem 导致 N 次重复读 storage
+   * @param {Array<{id, thumb?, phash?}>} items
+   * @returns {Promise<{duplicates: Array, newItems: Array}>}
+   */
+  async batchCheckItems(items) {
+    const history = await this.getAll();
+    const dedupByThumb = this.application && this.application.settings.dedupByThumb;
+    const dedupByPhash = this.application && this.application.settings.dedupByPhash;
+    const thumbIndex = dedupByThumb ? await this.getThumbIndex() : null;
+    const phashIndex = dedupByPhash ? await this.getPhashIndex() : null;
+
+    const duplicates = [];
+    const newItems = [];
+    for (const item of items) {
+      if (history[item.id]) {
+        duplicates.push(item);
+        continue;
+      }
+      if (thumbIndex && item.thumb) {
+        const thumbKey = this.normalizeThumb(item.thumb);
+        if (thumbIndex[thumbKey]) {
+          duplicates.push(item);
+          continue;
+        }
+      }
+      if (phashIndex && item.phash) {
+        let found = false;
+        for (const entry of phashIndex) {
+          if (this.hammingDistance(item.phash, entry.phash) <= PHASH_THRESHOLD) {
+            found = true;
+            break;
+          }
+        }
+        if (found) {
+          duplicates.push(item);
+          continue;
+        }
+      }
+      newItems.push(item);
+    }
+    return { duplicates, newItems };
   }
 
   normalizeThumb(thumb) {
@@ -253,6 +356,9 @@ class HistoryService extends AbstractService {
     });
     await new Promise(resolve => {
       browser.storage.local.set({ [PHASH_INDEX_KEY]: [] }, resolve);
+    });
+    await new Promise(resolve => {
+      browser.storage.local.set({ [PHASH_CACHE_KEY]: {} }, resolve);
     });
   }
 

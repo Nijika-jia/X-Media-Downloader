@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>下载中心 - X Media Downloader</title>
+  <link rel="stylesheet" href="downloadcenter.css">
+</head>
+<body>
+  <div class="dc-app">
+    <header class="dc-header">
+      <div class="dc-header-left">
+        <h1 class="dc-title">下载中心</h1>
+        <span class="dc-count" id="dc-count">0</span>
+      </div>
+      <div class="dc-header-right">
+        <button class="dc-clear-btn" id="dc-clear-btn" title="清理已完成任务">清理已完成</button>
+      </div>
+    </header>
+
+    <div class="dc-filter-bar">
+      <button class="dc-filter-btn active" data-filter="all">全部</button>
+      <button class="dc-filter-btn" data-filter="pending">等待中</button>
+      <button class="dc-filter-btn" data-filter="downloading">下载中</button>
+      <button class="dc-filter-btn" data-filter="completed">已完成</button>
+      <button class="dc-filter-btn" data-filter="failed">失败</button>
+    </div>
+
+    <div class="dc-task-list" id="dc-task-list"></div>
+    <div class="dc-empty" id="dc-empty">暂无下载任务</div>
+
+    <div class="dc-diag-section">
+      <button class="dc-diag-toggle" id="dc-diag-toggle" title="展开/收起诊断面板">
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span>文件名监听器诊断</span>
+        <svg class="dc-diag-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+      <div class="dc-diag-panel" id="dc-diag-panel">
+        <div class="dc-diag-hint">每次 Chrome 触发 onDeterminingFilename 都会记录一条。命中 = 本扩展成功改写了文件名；未命中 = 映射丢失或被其他扩展抢占。</div>
+        <div class="dc-diag-list" id="dc-diag-list"></div>
+      </div>
+    </div>
+  </div>
+  <script src="downloadcenter.js"></script>
+</body>
+</html>

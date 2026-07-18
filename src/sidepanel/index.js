@@ -39,6 +39,8 @@ class SidePanelApp {
     this.statusCategory = document.getElementById('x-status-category');
     this.statusBoss = document.getElementById('x-status-boss');
     this.statsBtn = document.getElementById('x-stats-btn');
+    this.galleryBtn = document.getElementById('x-gallery-btn');
+    this.downloadCenterBtn = document.getElementById('x-download-center-btn');
     this.statsPanel = document.getElementById('x-stats-panel');
     this.statsClose = document.getElementById('x-stats-close');
     this.settingsBtn = document.getElementById('x-settings-btn');
@@ -242,11 +244,14 @@ class SidePanelApp {
 
     this.bossKeyBtn.addEventListener('click', () => this.toggleBossMode());
 
-    // 右键任意位置触发隐私模式（快速反应）
-    document.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      this.toggleBossMode();
-    });
+    // 仅在媒体网格区域右键触发隐私模式（快速反应），其余区域保留正常右键菜单（复制/查看图片等）
+    const mediaGrid = document.getElementById('x-media-grid');
+    if (mediaGrid) {
+      mediaGrid.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this.toggleBossMode();
+      });
+    }
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -266,6 +271,14 @@ class SidePanelApp {
 
     this.statsBtn.addEventListener('click', () => this.toggleStats());
     this.statsClose.addEventListener('click', () => this.closeStats());
+
+    if (this.galleryBtn) {
+      this.galleryBtn.addEventListener('click', () => this.openGallery());
+    }
+
+    if (this.downloadCenterBtn) {
+      this.downloadCenterBtn.addEventListener('click', () => this.openDownloadCenter());
+    }
 
     if (this.settingsBtn) {
       this.settingsBtn.addEventListener('click', () => this.toggleSettings());
@@ -343,6 +356,20 @@ class SidePanelApp {
     if (this.bossMode) {
       this.statusBoss.innerHTML = `${ICON_SHIELD} 隐私模式`;
     }
+  }
+
+  openGallery() {
+    chrome.windows.create({
+      url: chrome.runtime.getURL('gallery.html'),
+      type: 'popup',
+      width: 1000,
+      height: 700
+    });
+  }
+
+  openDownloadCenter() {
+    // 通过 background 打开/复用下载中心标签页（chrome.tabs.create）
+    chrome.runtime.sendMessage({ action: 'dc_open_tab' });
   }
 
   toggleStats() {
@@ -520,13 +547,37 @@ class SidePanelApp {
   async handleMediaItems(items, tabId) {
     const newItems = this.mediaStore.addItems(items, tabId);
     if (newItems) {
+      // 先尝试从缓存加载已有 pHash（避免重新计算）
+      await this.loadCachedPhash(items);
       await this.checkHistoryForNewItems();
       this.renderer.render();
       this.emptyState.style.display = 'none';
 
-      // 异步计算 pHash（如果开启）
+      // 异步计算缺失的 pHash（如果开启）
       this.computePhashForItems(items);
     }
+  }
+
+  /**
+   * 从后台 pHash 缓存加载已计算的值，避免重复计算
+   */
+  async loadCachedPhash(items) {
+    try {
+      const ids = items.map(i => i.id);
+      const cached = await chrome.runtime.sendMessage({ action: 'get_phash_cache', ids });
+      if (cached) {
+        let changed = false;
+        for (const id in cached) {
+          const storeItem = this.mediaStore.getItem(id);
+          if (storeItem && !storeItem.phash && cached[id]) {
+            storeItem.phash = cached[id];
+            changed = true;
+          }
+        }
+        return changed;
+      }
+    } catch (e) {}
+    return false;
   }
 
   async computePhashForItems(items) {
@@ -534,8 +585,13 @@ class SidePanelApp {
       const settings = await chrome.runtime.sendMessage({ action: 'get_settings' });
       if (!settings || !settings.dedupByPhash) return;
 
-      // 只对图片计算 pHash（视频用封面图）
-      const photoItems = items.filter(i => i.type === 'photo' || i.type === 'video' || i.type === 'animated_gif');
+      // 只对图片计算 pHash（视频用封面图），跳过已有 pHash 的
+      const photoItems = items.filter(i =>
+        (i.type === 'photo' || i.type === 'video' || i.type === 'animated_gif') && !i.phash
+      );
+      if (photoItems.length === 0) return;
+
+      const computedItems = [];
       let phashChanged = false;
       for (const item of photoItems) {
         const thumbUrl = item.thumb || item.url;
@@ -545,8 +601,16 @@ class SidePanelApp {
           if (storeItem) {
             storeItem.phash = phash;
             phashChanged = true;
+            computedItems.push({ id: item.id, phash });
           }
         }
+      }
+
+      // 持久化到后台缓存（下次打开侧边栏不用重新计算）
+      if (computedItems.length > 0) {
+        try {
+          await chrome.runtime.sendMessage({ action: 'update_phash_cache', items: computedItems });
+        } catch (e) {}
       }
 
       // pHash 计算完成后，重新检查历史（此时才有 phash 可比对）
@@ -617,6 +681,10 @@ class SidePanelApp {
           this.mediaStore.clearSelection();
           this.renderer.updateAllItemSelections();
         }
+
+        if (result.failed && result.failed.length > 0) {
+          this.showInfoToast(`${result.failed.length} 个下载失败，详情见下载中心`);
+        }
       }
     } catch (e) {}
   }
@@ -678,8 +746,11 @@ class SidePanelApp {
   }
 
   updateSelectionUI() {
-    const allSelected = this.mediaStore.mediaMap.size > 0 &&
-      this.mediaStore.selectedIds.size === this.mediaStore.mediaMap.size;
+    // 基于当前可见项判断是否全选，与 selectAll 的判断逻辑保持一致
+    const visibleIds = Array.from(document.querySelectorAll('.x-media-item'))
+      .map(el => el.dataset.id);
+    const allSelected = visibleIds.length > 0 &&
+      visibleIds.every(id => this.mediaStore.selectedIds.has(id));
     this.selectAllBtn.textContent = allSelected ? '取消全选' : '全选';
     this.downloadSelectedBtn.disabled = this.mediaStore.selectedIds.size === 0;
   }

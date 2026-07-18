@@ -90,9 +90,11 @@ class MediaStore {
   }
 
   selectAll(visibleIds) {
-    const allSelected = this.mediaMap.size > 0 && this.selectedIds.size === this.mediaMap.size;
-    if (allSelected) {
-      this.selectedIds.clear();
+    if (!visibleIds || visibleIds.length === 0) return;
+    // 基于可见项判断是否已全选，避免过滤状态下与 mediaMap.size 比较导致 clear 分支不可达
+    const allVisibleSelected = visibleIds.every(id => this.selectedIds.has(id));
+    if (allVisibleSelected) {
+      visibleIds.forEach(id => this.selectedIds.delete(id));
     } else {
       visibleIds.forEach(id => this.selectedIds.add(id));
     }

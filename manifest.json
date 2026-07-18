@@ -8,6 +8,12 @@
     "downloads",
     "sidePanel"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["gallery.html", "downloadcenter.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "host_permissions": [
     "*://*.twitter.com/*",
     "*://*.x.com/*",

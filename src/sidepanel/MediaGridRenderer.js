@@ -4,6 +4,18 @@ const ICON_DELETE = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="cur
 
 const ICON_DOWNLOAD_SINGLE = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
 
+/**
+ * 转义字符串以安全插入 HTML 属性 / 文本，防止 URL 或其他动态值注入 HTML
+ */
+function escapeAttr(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 class MediaGridRenderer {
   constructor(mediaStore) {
     this.mediaStore = mediaStore;
@@ -68,9 +80,9 @@ class MediaGridRenderer {
 
     div.innerHTML = `
       <div class="x-media-thumb-container">
-        <img src="${item.thumb}" loading="lazy">
+        <img src="${escapeAttr(item.thumb)}" loading="lazy">
       </div>
-      <span class="x-media-type">${item.type}</span>
+      <span class="x-media-type">${escapeAttr(item.type)}</span>
       ${item.downloaded ? '<span class="x-downloaded-badge">已下载</span>' : ''}
       <div class="x-item-btn x-item-select-btn ${isSelected ? 'selected' : ''}" title="${selectTitle}">${isSelected ? ICON_CHECK : ICON_SELECT}</div>
       <div class="x-item-btn x-item-delete-btn" title="删除">${ICON_DELETE}</div>
