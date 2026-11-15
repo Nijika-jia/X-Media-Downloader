@@ -222,14 +222,23 @@ class MediaStore {
   }
 
   getCounts() {
-    const items = this.getAllItems();
-    const total = items.length;
-    const photos = items.filter(i => i.type === 'photo').length;
-    const videos = items.filter(i => i.type === 'video' || i.type === 'animated_gif').length;
-    const downloaded = items.filter(i => i.downloaded).length;
-    const downloading = items.filter(i => i.downloading).length;
-    const notDownloaded = total - downloaded;
-    return { total, photos, videos, downloaded, downloading, notDownloaded };
+    // 单次遍历统计，避免频繁点击时多次过滤大列表
+    let total = 0;
+    let photos = 0;
+    let videos = 0;
+    let downloaded = 0;
+    let downloading = 0;
+    this.mediaMap.forEach(item => {
+      total++;
+      if (item.type === 'photo') {
+        photos++;
+      } else if (item.type === 'video' || item.type === 'animated_gif') {
+        videos++;
+      }
+      if (item.downloaded) downloaded++;
+      if (item.downloading) downloading++;
+    });
+    return { total, photos, videos, downloaded, downloading, notDownloaded: total - downloaded };
   }
 
   addListener(callback) {
@@ -244,8 +253,13 @@ class MediaStore {
    * 导出所有媒体数据为可序列化的对象
    * @returns {Object} 包含导出数据和元信息
    */
-  exportData() {
-    const items = this.getAllItems();
+  /**
+   * 导出媒体数据为可序列化的对象
+   * @param {Array} sourceItems 要导出的项，不传则导出全部
+   * @returns {Object} 包含导出数据和元信息
+   */
+  exportData(sourceItems) {
+    const items = Array.isArray(sourceItems) ? sourceItems : this.getAllItems();
     const exportItems = items.map(item => ({
       id: item.id,
       url: item.url,
@@ -255,6 +269,7 @@ class MediaStore {
       author: item.author,
       downloaded: item.downloaded || false,
       phash: item.phash || null,
+      dhash: item.dhash || null,
       timestamp: item.timestamp || Date.now()
     }));
 
@@ -294,7 +309,8 @@ class MediaStore {
           tweetUrl: item.tweetUrl,
           author: item.author,
           downloaded: item.downloaded || false,
-          phash: item.phash,
+          phash: item.phash || null,
+          dhash: item.dhash || null,
           timestamp: item.timestamp || Date.now()
         });
         added++;

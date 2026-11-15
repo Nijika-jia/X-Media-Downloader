@@ -851,3 +851,18 @@ button:focus-visible {
 .dc-zip-btn.primary:hover {
   background: #1a8cd8;
 }
+
+/* ---------- 点击反馈 ---------- */
+
+.dc-filter-btn:active,
+.dc-clear-btn:active,
+.dc-zip-btn:active,
+.dc-retry-btn:active,
+.dc-diag-toggle:active {
+  transform: scale(0.94);
+  transition-duration: 0.04s;
+}
+
+.dc-zip-btn.primary:active {
+  background: #187fc4;
+}

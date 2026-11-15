@@ -482,23 +482,7 @@ class HistoryService extends AbstractService {
   }
 
   async save(history) {
-    // 永久保留：maxHistoryItems 为 0 或未设置时不截断（配合 unlimitedStorage 权限）
-    const maxItems = this.application
-      ? (this.application.settings.maxHistoryItems || 0)
-      : 0;
-
-    if (maxItems > 0) {
-      const entries = Object.entries(history);
-      if (entries.length > maxItems) {
-        entries.sort((a, b) => (b[1].downloadedAt || 0) - (a[1].downloadedAt || 0));
-        const trimmed = {};
-        entries.slice(0, maxItems).forEach(([key, val]) => {
-          trimmed[key] = val;
-        });
-        history = trimmed;
-      }
-    }
-
+    // 永久保留下载历史，不做数量截断（配合 unlimitedStorage 权限）
     return new Promise(resolve => {
       browser.storage.local.set({ [STORAGE_KEY]: history }, resolve);
     });
