@@ -1,7 +1,7 @@
 import MediaStore from './MediaStore';
 import MediaGridRenderer from './MediaGridRenderer';
 import { ICON_FOLDER, ICON_SHIELD, ICON_ALERT } from './constants';
-import { computePHash } from './phash';
+import { computeHashes } from './phash';
 
 const CATEGORY_LABELS = { '': '默认', real: '真人', anime: '动漫' };
 
@@ -20,6 +20,8 @@ class SidePanelApp {
     this.listenForMessages();
     this.connectPort();
     this.loadSettings();
+    this.loadCapturedItems();
+    this.loadStagedItems();
   }
 
   cacheElements() {
@@ -30,16 +32,27 @@ class SidePanelApp {
     this.clearBtn = document.getElementById('x-clear-btn');
     this.countEl = document.getElementById('x-count');
     this.emptyState = document.getElementById('x-empty-state');
-    this.filterBtns = document.querySelectorAll('.x-filter-btn');
+    this.mediaGrid = document.getElementById('x-media-grid');
+    this.selectionBar = document.getElementById('x-selection-bar');
+    this.selectionCount = document.getElementById('x-selection-count');
+    this.selectionActions = document.getElementById('x-selection-actions');
+    this.selectionClear = document.getElementById('x-selection-clear');
+    this.typeFilterBtns = document.querySelectorAll('#x-type-filter .x-filter-btn');
+    this.statusFilterBtns = document.querySelectorAll('#x-status-filter .x-filter-btn');
+    this.typeFilter = 'all';
+    this.statusFilter = 'all';
     this.fullViewToggle = document.getElementById('x-full-view-toggle');
+    this.hideStagedToggle = document.getElementById('x-hide-staged-toggle');
     this.clickOpenToggle = document.getElementById('x-click-open-toggle');
     this.bossKeyBtn = document.getElementById('x-boss-key-btn');
+    this.refreshBtn = document.getElementById('x-refresh-btn');
     this.bossOverlay = document.getElementById('x-boss-overlay');
     this.statusConnection = document.getElementById('x-status-connection');
     this.statusCategory = document.getElementById('x-status-category');
+    this.statusDownloads = document.getElementById('x-status-downloads');
+    this.statusStaged = document.getElementById('x-status-staged');
     this.statusBoss = document.getElementById('x-status-boss');
     this.statsBtn = document.getElementById('x-stats-btn');
-    this.galleryBtn = document.getElementById('x-gallery-btn');
     this.downloadCenterBtn = document.getElementById('x-download-center-btn');
     this.statsPanel = document.getElementById('x-stats-panel');
     this.statsClose = document.getElementById('x-stats-close');
@@ -48,6 +61,7 @@ class SidePanelApp {
     this.settingsClose = document.getElementById('x-settings-close');
     this.dedupByThumbToggle = document.getElementById('x-dedup-by-thumb');
     this.dedupByPhashToggle = document.getElementById('x-dedup-by-phash');
+    this.hoverAutoplayToggle = document.getElementById('x-hover-autoplay');
     this.usePresetsToggle = document.getElementById('x-use-presets');
     this.presetConfig = document.getElementById('x-preset-config');
     this.cat1Label = document.getElementById('x-cat-1-label');
@@ -55,6 +69,12 @@ class SidePanelApp {
     this.cat2Label = document.getElementById('x-cat-2-label');
     this.cat2Folder = document.getElementById('x-cat-2-folder');
     this.presetSaveBtn = document.getElementById('x-preset-save-btn');
+    this.exportBtn = document.getElementById('x-export-btn');
+    this.importBtn = document.getElementById('x-import-btn');
+    this.importFileInput = document.getElementById('x-import-file-input');
+    this.zipBtn = document.getElementById('x-zip-btn');
+    this.zipBadge = document.getElementById('x-zip-badge');
+    this.unstageBtn = document.getElementById('x-unstage-btn');
   }
 
   async loadSettings() {
@@ -67,6 +87,14 @@ class SidePanelApp {
         if (this.dedupByPhashToggle) {
           this.dedupByPhashToggle.checked = !!settings.dedupByPhash;
         }
+        const hoverAutoplay = settings.hoverAutoplay !== false;
+        if (this.hoverAutoplayToggle) {
+          this.hoverAutoplayToggle.checked = hoverAutoplay;
+        }
+        this.renderer.setHoverAutoplay(hoverAutoplay);
+
+        this.gridCardSize = Number(settings.gridCardSize) || 0;
+        this.applyGridSize();
         if (this.clickOpenToggle) {
           this.clickOpenToggle.checked = !!settings.clickToOpen;
           this.renderer.setClickToOpen(this.clickOpenToggle.checked);
@@ -74,6 +102,10 @@ class SidePanelApp {
         if (this.fullViewToggle) {
           this.fullViewToggle.checked = !!settings.fullViewMode;
           document.body.classList.toggle('full-view-mode', this.fullViewToggle.checked);
+        }
+        if (this.hideStagedToggle) {
+          this.hideStagedToggle.checked = !!settings.hideStaged;
+          this.renderer.setHideStaged(this.hideStagedToggle.checked);
         }
         // 加载预设配置
         const usePresets = settings.usePresets !== false;
@@ -98,6 +130,17 @@ class SidePanelApp {
         }
         // 更新顶部下拉框
         this.updateCategorySelect(usePresets, categories, settings.categoryFolders);
+      }
+    } catch (e) {}
+  }
+
+  async loadCapturedItems() {
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'get_captured_media' });
+      if (result && Array.isArray(result.items) && result.items.length > 0) {
+        await this.handleMediaItems(result.items, null);
+      } else {
+        await this.restoreDownloadStates();
       }
     } catch (e) {}
   }
@@ -164,7 +207,7 @@ class SidePanelApp {
   }
 
   bindEvents() {
-    this.renderer.onDownload = (items, category) => this.downloadItems(items, category != null ? category : this.downloadCategorySelect.value);
+    this.renderer.onStage = (item, category) => this.toggleStageItem(item, category);
     this.renderer.onShowLightbox = (item) => this.showLightbox(item);
     this.renderer.onOpenUrl = (item) => this.openTweetUrl(item);
     this.renderer.onDeleteItem = (ids) => this.deleteItems(ids);
@@ -174,19 +217,44 @@ class SidePanelApp {
       this.updateSelectionUI();
     });
 
-    this.filterBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.filterBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.renderer.setFilter(btn.dataset.filter);
-        this.updateCount();
+    const bindFilterGroup = (groupBtns, onSelect) => {
+      groupBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          groupBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          onSelect(btn.dataset.filter);
+          this.renderer.setFilter(this.typeFilter, this.statusFilter);
+          this.updateCount();
+          this.updateUnstageBtnVisibility();
+        });
       });
-    });
+    };
+
+    bindFilterGroup(this.typeFilterBtns, (value) => { this.typeFilter = value; });
+    bindFilterGroup(this.statusFilterBtns, (value) => { this.statusFilter = value; });
 
     this.fullViewToggle.addEventListener('change', (e) => {
       document.body.classList.toggle('full-view-mode', e.target.checked);
       this.updateSettings({ fullViewMode: e.target.checked });
     });
+
+    if (this.hideStagedToggle) {
+      this.hideStagedToggle.addEventListener('change', (e) => {
+        const enabled = e.target.checked;
+        // 与「已暂存」筛选互斥：开启隐藏时状态筛选重置为「不限」
+        if (enabled && this.statusFilter === 'staged') {
+          this.statusFilter = 'all';
+          this.statusFilterBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.filter === 'all');
+          });
+          this.renderer.setFilter(this.typeFilter, this.statusFilter);
+          this.updateUnstageBtnVisibility();
+        }
+        this.renderer.setHideStaged(enabled);
+        this.updateSettings({ hideStaged: enabled });
+        this.updateCount();
+      });
+    }
 
     if (this.clickOpenToggle) {
       this.clickOpenToggle.addEventListener('change', (e) => {
@@ -209,6 +277,29 @@ class SidePanelApp {
 
     if (this.presetSaveBtn) {
       this.presetSaveBtn.addEventListener('click', () => this.saveCustomPresets());
+    }
+
+    if (this.zipBtn) {
+      this.zipBtn.addEventListener('click', () => this.packStagedItems());
+    }
+
+    if (this.exportBtn) {
+      this.exportBtn.addEventListener('click', () => this.exportMediaList());
+    }
+
+    if (this.importBtn) {
+      this.importBtn.addEventListener('click', () => {
+        console.log('[X-Media] 导入按钮被点击', this.importFileInput);
+        if (this.importFileInput) {
+          this.importFileInput.click();
+        } else {
+          console.error('[X-Media] importFileInput 为 null');
+        }
+      });
+    }
+
+    if (this.importFileInput) {
+      this.importFileInput.addEventListener('change', (e) => this.handleImportFile(e));
     }
 
     this.selectAllBtn.addEventListener('click', () => {
@@ -234,15 +325,27 @@ class SidePanelApp {
       });
     }
 
+    if (this.unstageBtn) {
+      this.unstageBtn.addEventListener('click', () => this.unstageSelected());
+    }
+
     this.clearBtn.addEventListener('click', () => {
       this.mediaStore.clear();
+      this.mediaStore.applyStaged([]);
       this.renderer.grid.innerHTML = '';
       this.updateCount();
       this.updateSelectionUI();
+      this.updateStagedStatus();
       this.emptyState.style.display = 'block';
+      chrome.runtime.sendMessage({ action: 'clear_captured_media' }).catch(() => {});
+      chrome.runtime.sendMessage({ action: 'clear_staged_media' }).catch(() => {});
     });
 
     this.bossKeyBtn.addEventListener('click', () => this.toggleBossMode());
+
+    if (this.refreshBtn) {
+      this.refreshBtn.addEventListener('click', () => this.refreshDownloadState());
+    }
 
     // 仅在媒体网格区域右键触发隐私模式（快速反应），其余区域保留正常右键菜单（复制/查看图片等）
     const mediaGrid = document.getElementById('x-media-grid');
@@ -250,6 +353,15 @@ class SidePanelApp {
       mediaGrid.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         this.toggleBossMode();
+      });
+    }
+
+    this.setupBoxSelection();
+
+    if (this.selectionClear) {
+      this.selectionClear.addEventListener('click', () => {
+        this.mediaStore.clearSelection();
+        this.renderer.updateAllItemSelections();
       });
     }
 
@@ -271,10 +383,6 @@ class SidePanelApp {
 
     this.statsBtn.addEventListener('click', () => this.toggleStats());
     this.statsClose.addEventListener('click', () => this.closeStats());
-
-    if (this.galleryBtn) {
-      this.galleryBtn.addEventListener('click', () => this.openGallery());
-    }
 
     if (this.downloadCenterBtn) {
       this.downloadCenterBtn.addEventListener('click', () => this.openDownloadCenter());
@@ -307,6 +415,232 @@ class SidePanelApp {
           this.showInfoToast('已关闭感知哈希去重');
         }
       });
+    }
+
+    if (this.hoverAutoplayToggle) {
+      this.hoverAutoplayToggle.addEventListener('change', (e) => {
+        this.renderer.setHoverAutoplay(e.target.checked);
+        this.updateSettings({ hoverAutoplay: e.target.checked });
+      });
+    }
+
+    // 卡片大小：+ / - 缩放，0 恢复自动适配
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target;
+      if (target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        this.adjustGridSize(20);
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        this.adjustGridSize(-20);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        this.resetGridSize();
+      }
+    });
+  }
+
+  // ===== 卡片大小 =====
+
+  applyGridSize() {
+    if (this.gridCardSize > 0) {
+      document.documentElement.style.setProperty('--x-card-min', `${this.gridCardSize}px`);
+    } else {
+      document.documentElement.style.removeProperty('--x-card-min');
+    }
+  }
+
+  adjustGridSize(delta) {
+    let base = this.gridCardSize;
+    if (!base) {
+      const first = this.mediaGrid ? this.mediaGrid.querySelector('.x-media-item') : null;
+      base = first ? Math.round(first.getBoundingClientRect().width) : 160;
+    }
+    const next = Math.max(80, Math.min(420, base + delta));
+    this.gridCardSize = next;
+    this.applyGridSize();
+    this.updateSettings({ gridCardSize: next });
+    this.showInfoToast(`卡片大小：${next}px（按 0 恢复自动）`);
+  }
+
+  resetGridSize() {
+    this.gridCardSize = 0;
+    this.applyGridSize();
+    this.updateSettings({ gridCardSize: 0 });
+    this.showInfoToast('卡片大小已恢复自动适配');
+  }
+
+  // ===== 鼠标框选 =====
+
+  setupBoxSelection() {
+    const grid = this.mediaGrid;
+    if (!grid) return;
+
+    let startX = 0;
+    let startY = 0;
+    let dragging = false;
+    let boxEl = null;
+
+    const isInteractiveTarget = (target) => {
+      return !!target.closest('button, video, input, select, .x-item-btn, .x-inline-play, .x-dl-actions');
+    };
+
+    const onMouseMove = (ev) => {
+      if (!dragging) {
+        if (Math.abs(ev.clientX - startX) < 5 && Math.abs(ev.clientY - startY) < 5) return;
+        dragging = true;
+        document.body.classList.add('x-box-selecting');
+        boxEl = document.createElement('div');
+        boxEl.className = 'x-selection-box';
+        document.body.appendChild(boxEl);
+      }
+      const rect = this.getBoxRect(startX, startY, ev.clientX, ev.clientY);
+      boxEl.style.left = `${rect.left}px`;
+      boxEl.style.top = `${rect.top}px`;
+      boxEl.style.width = `${rect.right - rect.left}px`;
+      boxEl.style.height = `${rect.bottom - rect.top}px`;
+      this.highlightBoxHits(rect);
+    };
+
+    const onMouseUp = (ev) => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.classList.remove('x-box-selecting');
+      if (boxEl) {
+        boxEl.remove();
+        boxEl = null;
+      }
+      if (!dragging) return;
+
+      // 拖动结束后吞掉一次点击，避免误触缩略图或卡片按钮
+      this._suppressClickUntil = Date.now() + 120;
+      const rect = this.getBoxRect(startX, startY, ev.clientX, ev.clientY);
+      const hits = this.getBoxHits(rect);
+      this.applyBoxSelection(hits, ev.ctrlKey || ev.metaKey || ev.shiftKey);
+    };
+
+    grid.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (isInteractiveTarget(e.target)) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      dragging = false;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+
+    grid.addEventListener('click', (e) => {
+      if (this._suppressClickUntil && Date.now() < this._suppressClickUntil) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }, true);
+
+    // 防止图片原生拖拽打断框选
+    grid.addEventListener('dragstart', (e) => e.preventDefault());
+  }
+
+  getBoxRect(x1, y1, x2, y2) {
+    return {
+      left: Math.min(x1, x2),
+      top: Math.min(y1, y2),
+      right: Math.max(x1, x2),
+      bottom: Math.max(y1, y2)
+    };
+  }
+
+  getBoxHits(rect) {
+    const hits = [];
+    this.mediaGrid.querySelectorAll('.x-media-item').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top) {
+        hits.push(el.dataset.id);
+      }
+    });
+    return hits;
+  }
+
+  highlightBoxHits(rect) {
+    const hitSet = new Set(this.getBoxHits(rect));
+    this.mediaGrid.querySelectorAll('.x-media-item').forEach(el => {
+      el.classList.toggle('box-selected', hitSet.has(el.dataset.id));
+    });
+  }
+
+  applyBoxSelection(ids, additive) {
+    this.mediaGrid.querySelectorAll('.x-media-item.box-selected').forEach(el => {
+      el.classList.remove('box-selected');
+    });
+    if (!additive) {
+      this.mediaStore.selectedIds.clear();
+    }
+    ids.forEach(id => this.mediaStore.selectedIds.add(id));
+    if (ids.length > 0) {
+      this.mediaStore.lastSelectedId = ids[ids.length - 1];
+    }
+    this.mediaStore.notifyListeners('selection_changed');
+    this.renderer.updateAllItemSelections();
+  }
+
+  updateSelectionBar() {
+    if (!this.selectionBar) return;
+    const count = this.mediaStore.selectedIds.size;
+    this.selectionBar.hidden = count === 0;
+    if (count === 0) return;
+    this.selectionCount.textContent = `已选 ${count} 项`;
+    this.renderSelectionActions();
+  }
+
+  renderSelectionActions() {
+    if (!this.selectionActions) return;
+    const usePresets = this.renderer.usePresets && this.renderer.categories.length > 0;
+    const categories = usePresets
+      ? this.renderer.categories
+      : [{ value: '', label: '暂存' }];
+
+    this.selectionActions.innerHTML = '';
+    categories.forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = 'x-selection-btn';
+      btn.textContent = cat.label;
+      btn.title = `把选中的项暂存到${cat.label}`;
+      btn.addEventListener('click', () => this.stageSelectedItems(cat.value));
+      this.selectionActions.appendChild(btn);
+    });
+  }
+
+  async stageSelectedItems(category) {
+    const items = this.mediaStore.getSelectedItems();
+    if (items.length === 0) return;
+
+    const payload = items.map(item => {
+      const storeItem = this.mediaStore.getItem(item.id);
+      if (!storeItem || (!storeItem.phash && !storeItem.dhash)) return item;
+      return { ...item, phash: storeItem.phash, dhash: storeItem.dhash };
+    });
+
+    try {
+      const result = await chrome.runtime.sendMessage({
+        action: 'stage_media_batch',
+        items: payload,
+        category: category == null ? '' : category
+      });
+      if (!result || !result.ok) {
+        this.showInfoToast('批量暂存失败，请稍后重试');
+        return;
+      }
+      this.mediaStore.setStagedMany(payload, category);
+      this.mediaStore.clearSelection();
+      this.renderer.render();
+      this.updateSelectionUI();
+      this.updateStagedStatus();
+      this.updateCount();
+      this.showInfoToast(`已将 ${payload.length} 项暂存`);
+    } catch (e) {
+      this.showInfoToast('批量暂存失败，请稍后重试');
     }
   }
 
@@ -356,15 +690,6 @@ class SidePanelApp {
     if (this.bossMode) {
       this.statusBoss.innerHTML = `${ICON_SHIELD} 隐私模式`;
     }
-  }
-
-  openGallery() {
-    chrome.windows.create({
-      url: chrome.runtime.getURL('gallery.html'),
-      type: 'popup',
-      width: 1000,
-      height: 700
-    });
   }
 
   openDownloadCenter() {
@@ -509,6 +834,29 @@ class SidePanelApp {
       if (message.action === 'media_intercepted_forward') {
         this.handleMediaItems(message.items, message.tabId);
       }
+      if (message.action === 'dc_task_update' && message.task) {
+        const id = String(message.task.id);
+        if (message.task.status === 'pending' || message.task.status === 'downloading' || message.task.status === 'retrying') {
+          const state = message.task.status === 'pending' ? 'queued' : message.task.status;
+          this.mediaStore.markDownloading([id], state);
+          this.renderer.markItemDownloading(id, state);
+        } else if (message.task.status === 'completed') {
+          this.mediaStore.markDownloaded([id]);
+          this.renderer.markItemDownloaded(id);
+        } else if (message.task.status === 'failed') {
+          this.mediaStore.markNotDownloaded([id]);
+          this.renderer.markItemNotDownloaded(id);
+          this.showInfoToast('下载失败，可在下载中心手动重试');
+        }
+      }
+      if (message.action === 'zip_batch_completed' && Array.isArray(message.ids)) {
+        this.mediaStore.markDownloaded(message.ids);
+        message.ids.forEach(id => {
+          this.renderer.markItemDownloaded(id);
+          this.mediaStore.setStaged(id, null);
+        });
+        this.updateStagedStatus();
+      }
     });
   }
 
@@ -551,10 +899,37 @@ class SidePanelApp {
       await this.loadCachedPhash(items);
       await this.checkHistoryForNewItems();
       this.renderer.render();
+      await this.restoreDownloadStates();
       this.emptyState.style.display = 'none';
 
       // 异步计算缺失的 pHash（如果开启）
       this.computePhashForItems(items);
+    }
+  }
+
+  async restoreDownloadStates() {
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'dc_get_tasks' });
+      const activeTasks = result && Array.isArray(result.tasks)
+        ? result.tasks.filter(task => ['pending', 'downloading', 'retrying'].includes(task.status))
+        : [];
+      const activeIds = new Set(activeTasks.map(task => String(task.id)));
+      this.mediaStore.getAllItems().forEach(item => {
+        if (item.downloading && !activeIds.has(String(item.id))) {
+          this.mediaStore.markNotDownloaded([item.id]);
+          this.renderer.markItemNotDownloaded(item.id);
+        }
+      });
+
+      activeTasks.forEach(task => {
+        const id = String(task.id);
+        if (!this.mediaStore.getItem(id)) return;
+        const state = task.status === 'pending' ? 'queued' : task.status;
+        this.mediaStore.markDownloading([id], state);
+        this.renderer.markItemDownloading(id, state);
+      });
+    } catch (e) {
+      // 下载中心不可用时保留本地即时状态，下一次消息或手动刷新会再次同步。
     }
   }
 
@@ -569,8 +944,16 @@ class SidePanelApp {
         let changed = false;
         for (const id in cached) {
           const storeItem = this.mediaStore.getItem(id);
-          if (storeItem && !storeItem.phash && cached[id]) {
-            storeItem.phash = cached[id];
+          if (!storeItem) continue;
+          const entry = cached[id];
+          const phash = typeof entry === 'string' ? entry : (entry && entry.phash);
+          const dhash = entry && typeof entry === 'object' ? entry.dhash : null;
+          if (!storeItem.phash && phash) {
+            storeItem.phash = phash;
+            changed = true;
+          }
+          if (!storeItem.dhash && dhash) {
+            storeItem.dhash = dhash;
             changed = true;
           }
         }
@@ -585,9 +968,10 @@ class SidePanelApp {
       const settings = await chrome.runtime.sendMessage({ action: 'get_settings' });
       if (!settings || !settings.dedupByPhash) return;
 
-      // 只对图片计算 pHash（视频用封面图），跳过已有 pHash 的
+      // 只对图片计算哈希（视频用封面图），aHash 或 dHash 任一缺失都需要重算
       const photoItems = items.filter(i =>
-        (i.type === 'photo' || i.type === 'video' || i.type === 'animated_gif') && !i.phash
+        (i.type === 'photo' || i.type === 'video' || i.type === 'animated_gif') &&
+        (!i.phash || !i.dhash)
       );
       if (photoItems.length === 0) return;
 
@@ -595,13 +979,14 @@ class SidePanelApp {
       let phashChanged = false;
       for (const item of photoItems) {
         const thumbUrl = item.thumb || item.url;
-        const phash = await computePHash(thumbUrl);
-        if (phash) {
+        const hashes = await computeHashes(thumbUrl);
+        if (hashes) {
           const storeItem = this.mediaStore.getItem(item.id);
           if (storeItem) {
-            storeItem.phash = phash;
+            storeItem.phash = hashes.phash;
+            storeItem.dhash = hashes.dhash;
             phashChanged = true;
-            computedItems.push({ id: item.id, phash });
+            computedItems.push({ id: item.id, phash: hashes.phash, dhash: hashes.dhash });
           }
         }
       }
@@ -620,10 +1005,10 @@ class SidePanelApp {
     } catch (e) {}
   }
 
-  async checkHistoryForNewItems() {
+  async checkHistoryForNewItems({ render = false } = {}) {
     const allItems = this.mediaStore.getAllItems();
     const allIds = allItems.map(i => i.id);
-    if (allIds.length === 0) return;
+    if (allIds.length === 0) return false;
 
     try {
       const result = await chrome.runtime.sendMessage({
@@ -639,21 +1024,75 @@ class SidePanelApp {
             downloadedIds.push(id);
           }
         }
-        if (downloadedIds.length > 0) {
-          this.mediaStore.markDownloaded(downloadedIds);
-          // 重新渲染以显示已下载状态
-          this.renderer.render();
-        }
+        this.mediaStore.syncDownloaded(downloadedIds);
+        if (render) this.renderer.render();
+        return true;
       }
     } catch (e) {}
+    return false;
+  }
+
+  async refreshDownloadState() {
+    const refreshed = await this.checkHistoryForNewItems({ render: true });
+    await this.restoreDownloadStates();
+    if (refreshed) {
+      this.emptyState.style.display = this.mediaStore.getAllItems().length > 0 ? 'none' : 'block';
+      this.updateCount();
+      this.showInfoToast('下载状态已刷新');
+    } else {
+      this.updateCount();
+      this.showInfoToast('下载任务状态已刷新');
+    }
   }
 
   async downloadItems(items, category = '') {
+    const requestItems = [];
+    const activeIds = [];
+    const downloadedIds = [];
+    const seenIds = new Set();
+
+    (Array.isArray(items) ? items : []).forEach(item => {
+      const storeItem = item && this.mediaStore.getItem(item.id);
+      if (!storeItem || seenIds.has(storeItem.id)) return;
+      seenIds.add(storeItem.id);
+
+      if (storeItem.downloaded) {
+        downloadedIds.push(storeItem.id);
+      } else if (storeItem.downloading) {
+        activeIds.push(storeItem.id);
+      } else {
+        requestItems.push(storeItem);
+      }
+    });
+
+    const queuedIds = requestItems.map(item => item.id);
+    if (queuedIds.length > 0) {
+      // 先锁定卡片，再等待后台响应，连续点击时也能立即看到每一项已入队。
+      this.mediaStore.markDownloading(queuedIds, 'queued');
+      queuedIds.forEach(id => this.renderer.markItemDownloading(id, 'queued'));
+    }
+
+    const immediateFeedback = [];
+    if (queuedIds.length > 0) {
+      immediateFeedback.push(`${queuedIds.length} 个任务已加入队列`);
+    }
+    if (activeIds.length > 0) {
+      immediateFeedback.push(`${activeIds.length} 个任务正在下载中`);
+    }
+    if (downloadedIds.length > 0) {
+      immediateFeedback.push(`${downloadedIds.length} 个文件已下载过`);
+    }
+    if (immediateFeedback.length > 0) {
+      this.showInfoToast(immediateFeedback.join('，'));
+    }
+    if (requestItems.length === 0) return;
+
     try {
-      // 附加 pHash（如果已计算）
-      const itemsWithPhash = items.map(item => {
+      // 附加哈希指纹（如果已计算）
+      const itemsWithPhash = requestItems.map(item => {
         const storeItem = this.mediaStore.getItem(item.id);
-        return storeItem && storeItem.phash ? { ...item, phash: storeItem.phash } : item;
+        if (!storeItem || (!storeItem.phash && !storeItem.dhash)) return item;
+        return { ...item, phash: storeItem.phash, dhash: storeItem.dhash };
       });
 
       const result = await chrome.runtime.sendMessage({
@@ -663,30 +1102,239 @@ class SidePanelApp {
       });
 
       if (result) {
-        if (result.downloaded && result.downloaded.length > 0) {
-          this.mediaStore.markDownloaded(result.downloaded);
-          result.downloaded.forEach(id => {
+        const feedback = [];
+        const started = result.started || [];
+        const inProgress = result.inProgress || [];
+        const retrying = result.retrying || [];
+        const duplicates = result.duplicates || [];
+        const completed = result.downloaded || [];
+        const failed = result.failed || [];
+        const acceptedIds = new Set([
+          ...started,
+          ...inProgress,
+          ...retrying,
+          ...duplicates,
+          ...completed
+        ].map(id => String(id)));
+
+        // 只把后台明确判定失败或无效的项回滚，避免请求尚未返回时短暂丢失状态。
+        const unresolvedIds = queuedIds.filter(id => !acceptedIds.has(String(id)));
+        if (unresolvedIds.length > 0) {
+          this.mediaStore.markNotDownloaded(unresolvedIds);
+          unresolvedIds.forEach(id => this.renderer.markItemNotDownloaded(id));
+        }
+
+        if (started.length > 0) {
+          this.mediaStore.markDownloading(started, 'downloading');
+          started.forEach(id => this.renderer.markItemDownloading(id, 'downloading'));
+        }
+        if (inProgress.length > 0) {
+          this.mediaStore.markDownloading(inProgress, 'downloading');
+          inProgress.forEach(id => this.renderer.markItemDownloading(id, 'downloading'));
+        }
+        if (retrying.length > 0) {
+          this.mediaStore.markDownloading(retrying, 'retrying');
+          retrying.forEach(id => this.renderer.markItemDownloading(id, 'retrying'));
+          feedback.push(`${retrying.length} 个任务将在网络恢复后自动重试`);
+        }
+        if (completed.length > 0) {
+          this.mediaStore.markDownloaded(completed);
+          completed.forEach(id => {
             this.renderer.markItemDownloaded(id);
           });
           this.mediaStore.clearSelection();
           this.renderer.updateAllItemSelections();
         }
 
-        if (result.duplicates && result.duplicates.length > 0) {
-          this.showDuplicateToast(result.duplicates.length);
-          result.duplicates.forEach(id => {
-            this.mediaStore.markDownloaded(id);
+        if (duplicates.length > 0) {
+          this.showDuplicateToast(duplicates.length);
+          duplicates.forEach(id => {
+            this.mediaStore.markDownloaded([id]);
             this.renderer.markItemDownloaded(id);
           });
           this.mediaStore.clearSelection();
           this.renderer.updateAllItemSelections();
         }
 
-        if (result.failed && result.failed.length > 0) {
-          this.showInfoToast(`${result.failed.length} 个下载失败，详情见下载中心`);
+        if (failed.length > 0) {
+          this.mediaStore.markNotDownloaded(failed);
+          failed.forEach(id => this.renderer.markItemNotDownloaded(id));
+          feedback.push(`${failed.length} 个下载失败，详情见下载中心`);
         }
+        if (result.invalid > 0) {
+          feedback.push(`${result.invalid} 个媒体地址无效`);
+        }
+        if (feedback.length > 0) {
+          this.showInfoToast(feedback.join('，'));
+        }
+      } else {
+        this.mediaStore.markNotDownloaded(queuedIds);
+        queuedIds.forEach(id => this.renderer.markItemNotDownloaded(id));
+        this.showInfoToast('下载请求没有得到响应，请重试');
+      }
+    } catch (e) {
+      this.mediaStore.markNotDownloaded(queuedIds);
+      queuedIds.forEach(id => this.renderer.markItemNotDownloaded(id));
+      await this.restoreDownloadStates();
+      this.showInfoToast('下载请求失败，请稍后重试');
+    }
+  }
+
+  // ===== 暂存区（卡片下方的分区按钮） =====
+
+  async loadStagedItems() {
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'get_staged_media' });
+      if (!result || !Array.isArray(result.items)) return;
+
+      this.mediaStore.applyStaged(result.items);
+
+      // 暂存项可能不在当前捕获列表里（跨会话或列表已清空），补回列表以便管理
+      const missing = result.items.filter(item => !this.mediaStore.getItem(item.id));
+      if (missing.length > 0) {
+        this.mediaStore.addItems(missing.map(item => ({
+          id: item.id,
+          url: item.url,
+          thumb: item.thumb,
+          type: item.type,
+          phash: item.phash || null,
+          dhash: item.dhash || null,
+          downloaded: false
+        })), null);
+        this.renderer.render();
+        this.emptyState.style.display = 'none';
+      }
+
+      this.renderer.updateAllStagedStates();
+      this.updateStagedStatus();
+      this.updateCount();
+    } catch (e) {}
+  }
+
+  async toggleStageItem(item, category) {
+    const storeItem = this.mediaStore.getItem(item.id) || item;
+    const staged = storeItem._stagedCategory;
+    const normalizedCategory = category == null ? '' : category;
+    const isSame = staged != null && String(staged) === String(normalizedCategory);
+
+    try {
+      if (isSame) {
+        await chrome.runtime.sendMessage({ action: 'unstage_media', ids: [item.id] });
+        this.mediaStore.setStaged(item.id, null);
+      } else {
+        const payload = (!storeItem.phash && !storeItem.dhash)
+          ? item
+          : { ...item, phash: storeItem.phash, dhash: storeItem.dhash };
+        await chrome.runtime.sendMessage({
+          action: 'stage_media',
+          item: payload,
+          category: normalizedCategory
+        });
+        this.mediaStore.setStaged(item.id, {
+          id: item.id,
+          url: item.url,
+          thumb: item.thumb || null,
+          type: item.type,
+          phash: storeItem.phash || null,
+          dhash: storeItem.dhash || null,
+          category: normalizedCategory,
+          stagedAt: Date.now()
+        });
+      }
+      this.renderer.updateStagedState(
+        this.renderer.grid.querySelector(`[data-id="${item.id}"]`),
+        storeItem
+      );
+      this.updateStagedStatus();
+
+      // 「已暂存」筛选或「隐藏已暂存」开启时，暂存状态变化需要立即增减列表项
+      if (this.statusFilter === 'staged' || this.renderer.currentHideStaged) {
+        this.renderer.render();
+        this.updateSelectionUI();
+      }
+    } catch (e) {
+      this.showInfoToast('暂存操作失败，请稍后重试');
+    }
+  }
+
+  updateStagedStatus() {
+    const count = this.mediaStore.stagedMap.size;
+    if (this.statusStaged) {
+      this.statusStaged.style.display = count > 0 ? 'inline-flex' : 'none';
+      this.statusStaged.textContent = `暂存 ${count}`;
+    }
+    if (this.zipBadge) {
+      this.zipBadge.hidden = count === 0;
+      this.zipBadge.textContent = count > 99 ? '99+' : String(count);
+    }
+    if (this.zipBtn) {
+      this.zipBtn.disabled = count === 0;
+    }
+  }
+
+  updateUnstageBtnVisibility() {
+    if (!this.unstageBtn) return;
+    this.unstageBtn.hidden = this.statusFilter !== 'staged';
+  }
+
+  async unstageSelected() {
+    const items = this.mediaStore.getSelectedItems();
+    if (items.length === 0) {
+      this.showInfoToast('请先选择要取消暂存的媒体');
+      return;
+    }
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'unstage_media',
+        ids: items.map(item => item.id)
+      });
+      items.forEach(item => this.mediaStore.setStaged(item.id, null));
+      this.mediaStore.clearSelection();
+      this.renderer.render();
+      this.updateSelectionUI();
+      this.updateCount();
+      this.updateStagedStatus();
+      this.showInfoToast(`已取消 ${items.length} 项的暂存`);
+    } catch (e) {
+      this.showInfoToast('取消暂存失败，请稍后重试');
+    }
+  }
+
+  /**
+   * 把暂存区里的媒体交给下载中心打包
+   */
+  async packStagedItems() {
+    let stagedItems = [];
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'get_staged_media' });
+      if (res && Array.isArray(res.items)) {
+        stagedItems = res.items;
+        this.mediaStore.applyStaged(stagedItems);
       }
     } catch (e) {}
+
+    if (stagedItems.length === 0) {
+      this.showInfoToast('暂存区是空的：先点卡片下方的分区按钮');
+      return;
+    }
+
+    try {
+      const result = await chrome.runtime.sendMessage({
+        action: 'zip_prepare',
+        items: stagedItems
+      });
+      if (!result || !result.ok) {
+        this.showInfoToast('打包任务创建失败');
+        return;
+      }
+      if (result.count === 0) {
+        this.showInfoToast(`没有需要打包的新文件${result.duplicates ? `（${result.duplicates} 个已下载过）` : ''}`);
+        return;
+      }
+      this.showInfoToast(`已创建打包任务：${result.count} 个文件${result.duplicates ? `，跳过 ${result.duplicates} 个已下载` : ''}，请在下载中心开始打包`);
+    } catch (e) {
+      this.showInfoToast('打包请求失败，请稍后重试');
+    }
   }
 
   showDuplicateToast(count) {
@@ -732,8 +1380,11 @@ class SidePanelApp {
     if (!ids || ids.length === 0) return;
     this.mediaStore.removeItems(ids);
     this.renderer.removeItems(ids);
+    chrome.runtime.sendMessage({ action: 'remove_captured_media', ids }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'unstage_media', ids }).catch(() => {});
     this.updateCount();
     this.updateSelectionUI();
+    this.updateStagedStatus();
     if (this.mediaStore.getAllItems().length === 0) {
       this.emptyState.style.display = 'block';
     }
@@ -743,6 +1394,12 @@ class SidePanelApp {
   updateCount() {
     const counts = this.mediaStore.getCounts();
     this.countEl.innerHTML = `<span style="font-size: 14px; margin-left: 4px;">(${counts.total})</span> <span style="font-size: 12px; font-weight: normal; color: #71767b; margin-left: 4px;">图片 ${counts.photos} 视频 ${counts.videos} 已下 ${counts.downloaded} 未下 ${counts.notDownloaded}</span>`;
+    if (this.statusDownloads) {
+      this.statusDownloads.textContent = counts.downloading > 0
+        ? `下载中 ${counts.downloading}`
+        : '无下载任务';
+      this.statusDownloads.classList.toggle('active', counts.downloading > 0);
+    }
   }
 
   updateSelectionUI() {
@@ -753,6 +1410,64 @@ class SidePanelApp {
       visibleIds.every(id => this.mediaStore.selectedIds.has(id));
     this.selectAllBtn.textContent = allSelected ? '取消全选' : '全选';
     this.downloadSelectedBtn.disabled = this.mediaStore.selectedIds.size === 0;
+    this.updateSelectionBar();
+  }
+
+  /**
+   * 导出媒体列表为 JSON 文件
+   */
+  exportMediaList() {
+    const data = this.mediaStore.exportData();
+    if (data.count === 0) {
+      this.showInfoToast('没有可导出的媒体');
+      return;
+    }
+
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `x-media-export-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    this.showInfoToast(`已导出 ${data.count} 个媒体`);
+  }
+
+  /**
+   * 处理导入文件选择
+   */
+  async handleImportFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      const result = this.mediaStore.importData(data);
+      if (result.success) {
+        this.renderer.render();
+        this.emptyState.style.display = this.mediaStore.getAllItems().length > 0 ? 'none' : 'block';
+        this.updateCount();
+
+        // 同步下载状态
+        await this.checkHistoryForNewItems();
+
+        this.showInfoToast(`导入完成：新增 ${result.added} 个，跳过 ${result.skipped} 个`);
+      } else {
+        this.showInfoToast(`导入失败：${result.error}`);
+      }
+    } catch (e) {
+      this.showInfoToast('导入失败：文件格式错误');
+    }
+
+    // 清空 input 以便可以重复选择同一文件
+    event.target.value = '';
   }
 }
 

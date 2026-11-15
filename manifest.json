@@ -5,12 +5,14 @@
   "description": "X/Twitter Media Downloader with Side Panel support.",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "downloads",
+    "alarms",
     "sidePanel"
   ],
   "web_accessible_resources": [
     {
-      "resources": ["gallery.html", "downloadcenter.html"],
+      "resources": ["downloadcenter.html"],
       "matches": ["<all_urls>"]
     }
   ],

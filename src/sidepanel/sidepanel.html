@@ -5,6 +5,7 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
+  <input type="file" id="x-import-file-input" accept=".json" style="display: none;">
   <div class="x-sidebar-header">
     <div class="x-sidebar-title">X-媒体下载器 <span id="x-count">(0)</span></div>
     <div class="x-sidebar-actions">
@@ -17,45 +18,68 @@
       </label>
       <button class="x-icon-btn" id="x-select-all-btn" title="全选">全选</button>
       <button class="x-icon-btn danger" id="x-delete-selected-btn" title="删除选中">删除</button>
+      <button class="x-icon-btn" id="x-unstage-btn" title="取消选中项的暂存" hidden>取消暂存</button>
       <button class="x-icon-btn primary" id="x-download-selected-btn" title="下载选中">下载选中</button>
-      <button class="x-icon-btn" id="x-gallery-btn" title="打开画廊窗口"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></button>
+      <button class="x-icon-btn x-zip-btn" id="x-zip-btn" title="打包下载暂存区"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><line x1="10" y1="12" x2="14" y2="12"></line></svg><span class="x-zip-badge" id="x-zip-badge" hidden>0</span></button>
+      <button class="x-icon-btn" id="x-export-btn" title="导出媒体列表"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></button>
+      <button class="x-icon-btn" id="x-import-btn" title="导入媒体列表"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>
       <button class="x-icon-btn" id="x-download-center-btn" title="打开下载中心"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
       <button class="x-icon-btn" id="x-stats-btn" title="统计"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg></button>
       <button class="x-icon-btn" id="x-settings-btn" title="设置"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
       <button class="x-icon-btn" id="x-boss-key-btn" title="老板键 (Esc)"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></button>
+      <button class="x-icon-btn" id="x-refresh-btn" title="手动刷新下载状态"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M20 11a8.1 8.1 0 1 0 1.6 5"></path><polyline points="20 4 20 11 13 11"></polyline></svg></button>
       <button class="x-icon-btn" id="x-clear-btn" title="清空列表">清空</button>
     </div>
   </div>
 
   <div class="x-sidebar-filters">
-    <div class="x-filter-group">
-      <button class="x-filter-btn active" data-filter="all">全部</button>
-      <button class="x-filter-btn" data-filter="photo">图片</button>
-      <button class="x-filter-btn" data-filter="video">视频</button>
-      <button class="x-filter-btn" data-filter="downloaded">已下载</button>
-      <button class="x-filter-btn" data-filter="not_downloaded">未下载</button>
+    <div class="x-filter-groups">
+      <div class="x-filter-group" id="x-type-filter" title="按类型筛选">
+        <button class="x-filter-btn active" data-filter="all">全部</button>
+        <button class="x-filter-btn" data-filter="photo">图片</button>
+        <button class="x-filter-btn" data-filter="video">视频</button>
+      </div>
+      <div class="x-filter-group" id="x-status-filter" title="按下载状态筛选">
+        <button class="x-filter-btn active" data-filter="all">不限</button>
+        <button class="x-filter-btn" data-filter="downloaded">已下载</button>
+        <button class="x-filter-btn" data-filter="not_downloaded">未下载</button>
+        <button class="x-filter-btn" data-filter="staged">已暂存</button>
+      </div>
     </div>
     <div class="x-view-toggle">
       <label class="x-toggle-switch" title="开启后点击缩略图直接在新标签页打开媒体">
         <input type="checkbox" id="x-click-open-toggle">
         <span class="x-slider"></span>
       </label>
-      <span style="font-size: 12px; color: #71767b; margin-left: 6px;">从新标签页打开</span>
+      <span>从新标签页打开</span>
     </div>
     <div class="x-view-toggle">
       <label class="x-toggle-switch" title="切换全图显示">
         <input type="checkbox" id="x-full-view-toggle">
         <span class="x-slider"></span>
       </label>
-      <span style="font-size: 12px; color: #71767b; margin-left: 6px;">全图</span>
+      <span>全图</span>
+    </div>
+    <div class="x-view-toggle">
+      <label class="x-toggle-switch" title="隐藏已暂存的项，方便浏览还没看过的">
+        <input type="checkbox" id="x-hide-staged-toggle">
+        <span class="x-slider"></span>
+      </label>
+      <span>隐藏已暂存</span>
     </div>
   </div>
 
   <div class="x-sidebar-content">
     <div class="x-media-grid" id="x-media-grid"></div>
-    <div id="x-empty-state" style="padding: 20px; text-align: center; color: #666; font-size: 13px;">
+    <div id="x-empty-state">
       浏览 X/Twitter 时会自动捕获媒体
     </div>
+  </div>
+
+  <div class="x-selection-bar" id="x-selection-bar" hidden>
+    <span class="x-selection-count" id="x-selection-count">已选 0 项</span>
+    <div class="x-selection-actions" id="x-selection-actions"></div>
+    <button class="x-selection-clear" id="x-selection-clear" title="取消选择">取消</button>
   </div>
 
   <div class="x-status-bar" id="x-status-bar">
@@ -64,6 +88,8 @@
       <span>采集中</span>
     </span>
     <span class="x-status-item" id="x-status-category"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> 默认</span>
+    <span class="x-status-item x-status-downloads" id="x-status-downloads">无下载任务</span>
+    <span class="x-status-item x-status-staged" id="x-status-staged" style="display:none;">暂存 0</span>
     <span class="x-status-item x-status-boss" id="x-status-boss" style="display:none;"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> 隐私模式</span>
   </div>
 
@@ -207,6 +233,25 @@ function Timer() {
             <input type="text" id="x-cat-2-folder" placeholder="文件夹名（如：动漫）" maxlength="20">
           </div>
           <button class="x-preset-save-btn" id="x-preset-save-btn">保存预设</button>
+        </div>
+      </div>
+      <div class="x-settings-section">
+        <div class="x-settings-section-title">浏览体验</div>
+        <div class="x-settings-row">
+          <div class="x-settings-row-info">
+            <div class="x-settings-row-name">悬停自动播放</div>
+            <div class="x-settings-row-desc">鼠标在视频卡片上停留片刻后自动静音循环预览，移出即停。默认开启。</div>
+          </div>
+          <label class="x-toggle-switch">
+            <input type="checkbox" id="x-hover-autoplay" checked>
+            <span class="x-slider"></span>
+          </label>
+        </div>
+        <div class="x-settings-row">
+          <div class="x-settings-row-info">
+            <div class="x-settings-row-name">卡片大小</div>
+            <div class="x-settings-row-desc">按键盘 + / - 放大或缩小所有卡片，按 0 恢复自动适配。侧边栏拉宽后用它把图放大。</div>
+          </div>
         </div>
       </div>
       <div class="x-settings-section">

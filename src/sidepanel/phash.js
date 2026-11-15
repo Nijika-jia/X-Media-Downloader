@@ -1,55 +1,74 @@
 /**
  * 感知哈希 (pHash) 工具
+ * 同时生成 aHash（平均值哈希）与 dHash（水平梯度哈希），用于双指纹去重
  * 用于识别盗图、压缩图、截图等场景
- * 算法：图片 → 8x8 灰度 → 64位哈希指纹
  */
 
-const HASH_SIZE = 8; // 8x8 = 64 bit
+const A_SIZE = 8; // aHash：8x8 灰度 → 64 bit（与旧实现完全一致）
+const D_WIDTH = 9; // dHash：9x8 灰度，每行相邻比较 → 64 bit
+const D_HEIGHT = 8;
 
 /**
- * 计算图片的 pHash
- * @param {string} imageUrl 图片 URL
- * @returns {Promise<string|null>} 64位十六进制哈希字符串，失败返回 null
+ * 把图片缩到指定尺寸并转灰度矩阵
  */
-export function computePHash(imageUrl) {
+function drawGray(img, width, height) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const gray = [];
+  for (let y = 0; y < height; y++) {
+    const row = [];
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      row.push(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    }
+    gray.push(row);
+  }
+  return gray;
+}
+
+/**
+ * 同时计算 aHash 与 dHash
+ * @param {string} imageUrl 图片 URL
+ * @returns {Promise<{phash: string, dhash: string}|null>} 两个 16 位十六进制哈希
+ */
+export function computeHashes(imageUrl) {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
     img.onload = () => {
       try {
-        const canvas = document.createElement('canvas');
-        canvas.width = HASH_SIZE;
-        canvas.height = HASH_SIZE;
-        const ctx = canvas.getContext('2d');
-
-        // 缩小到 8x8
-        ctx.drawImage(img, 0, 0, HASH_SIZE, HASH_SIZE);
-
-        // 获取像素数据
-        const imageData = ctx.getImageData(0, 0, HASH_SIZE, HASH_SIZE);
-        const pixels = imageData.data;
-
-        // 转灰度并计算平均值
-        const grays = [];
+        // aHash：8x8 灰度与平均值比较（保持旧算法，兼容历史索引）
+        const grayA = drawGray(img, A_SIZE, A_SIZE);
         let sum = 0;
-        for (let i = 0; i < pixels.length; i += 4) {
-          // ITU-R 601-2 luma 转换
-          const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
-          grays.push(gray);
-          sum += gray;
+        for (let y = 0; y < A_SIZE; y++) {
+          for (let x = 0; x < A_SIZE; x++) {
+            sum += grayA[y][x];
+          }
         }
-        const avg = sum / grays.length;
-
-        // 生成 64 位哈希
-        let hash = '';
-        for (let i = 0; i < grays.length; i++) {
-          hash += grays[i] >= avg ? '1' : '0';
+        const avg = sum / (A_SIZE * A_SIZE);
+        let aBits = '';
+        for (let y = 0; y < A_SIZE; y++) {
+          for (let x = 0; x < A_SIZE; x++) {
+            aBits += grayA[y][x] >= avg ? '1' : '0';
+          }
         }
 
-        // 转十六进制字符串（更紧凑）
-        const hexHash = binaryToHex(hash);
-        resolve(hexHash);
+        // dHash：9x8 灰度，每行比较相邻像素的明暗变化
+        const grayD = drawGray(img, D_WIDTH, D_HEIGHT);
+        let dBits = '';
+        for (let y = 0; y < D_HEIGHT; y++) {
+          for (let x = 0; x < D_WIDTH - 1; x++) {
+            dBits += grayD[y][x] > grayD[y][x + 1] ? '1' : '0';
+          }
+        }
+
+        resolve({ phash: binaryToHex(aBits), dhash: binaryToHex(dBits) });
       } catch (e) {
         resolve(null);
       }
@@ -62,6 +81,13 @@ export function computePHash(imageUrl) {
 
     img.src = imageUrl;
   });
+}
+
+/**
+ * 兼容旧调用：只返回 aHash
+ */
+export function computePHash(imageUrl) {
+  return computeHashes(imageUrl).then(hashes => (hashes ? hashes.phash : null));
 }
 
 /**
