@@ -345,7 +345,7 @@ class DownloadCenterApp {
         break;
       }
       case 'done':
-        statusText = `完成：${this.zipMessage}（成功 ${stats.success.length}${stats.failed.length ? `，失败 ${stats.failed.length}` : ''}）`;
+        statusText = `完成：${this.zipMessage}（成功 ${stats.success.length}${stats.failed.length ? `，失败 ${stats.failed.length}（已保留在暂存区，可重新打包）` : ''}）`;
         percent = 100;
         break;
       case 'error':
@@ -490,9 +490,12 @@ class DownloadCenterApp {
 
   cancelZip() {
     if (this.zipAbort) this.zipAbort.abort();
-    // 取消后清掉持久化批次，避免下次打开页面又自动开始；页面内仍可手动重试
+    // 通过后台清掉持久化批次并通知其它页面，避免下次打开又自动开始
     try {
-      chrome.storage.session.remove('x_zip_batch', () => {});
+      chrome.runtime.sendMessage({
+        action: 'zip_batch_cancel',
+        batchId: this.zipBatch ? this.zipBatch.batchId : null
+      }).catch(() => {});
     } catch (e) {}
   }
 

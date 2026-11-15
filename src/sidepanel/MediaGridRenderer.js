@@ -67,7 +67,8 @@ class MediaGridRenderer {
   render() {
     // 重建列表前停止所有视频（内联播放器/悬停预览），避免已被移除的 video 继续发声
     this.grid.querySelectorAll('video').forEach(video => video.pause());
-    this.grid.innerHTML = '';
+    // 只移除卡片，保留动态创建的整排暂存按钮等辅助元素
+    this.grid.querySelectorAll('.x-media-item').forEach(el => el.remove());
     const items = this.mediaStore.getFilteredItems(
       this.currentTypeFilter,
       this.currentStatusFilter,
@@ -77,6 +78,8 @@ class MediaGridRenderer {
     items.reverse().forEach(item => {
       this.addMediaItem(item, false);
     });
+
+    if (this.onRender) this.onRender();
   }
 
   addMediaItem(item, prepend = true) {
@@ -109,14 +112,14 @@ class MediaGridRenderer {
     if (this.usePresets && this.categories.length > 0) {
       downloadButtonsHtml = `<div class="${actionClass}">
         ${this.categories.map((cat, i) => {
-          const staged = item._stagedCategory != null && String(item._stagedCategory) === String(cat.value);
-          return `<button class="x-dl-action-btn x-dl-cat-${i}${staged ? ' staged' : ''}" data-category="${escapeAttr(cat.value)}" title="${staged ? `已暂存到${escapeAttr(cat.label)}，再次点击取消` : `暂存到${escapeAttr(cat.label)}`}">${escapeAttr(cat.label)}</button>`;
+          const staged = !item.zipping && item._stagedCategory != null && String(item._stagedCategory) === String(cat.value);
+          return `<button class="x-dl-action-btn x-dl-cat-${i}${staged ? ' staged' : ''}${item.zipping ? ' zipping' : ''}" data-category="${escapeAttr(cat.value)}" title="${item.zipping ? '正在打包中' : (staged ? `已暂存到${escapeAttr(cat.label)}，再次点击取消` : `暂存到${escapeAttr(cat.label)}`)}">${escapeAttr(cat.label)}</button>`;
         }).join('')}
       </div>`;
     } else {
-      const staged = item._stagedCategory != null;
+      const staged = !item.zipping && item._stagedCategory != null;
       downloadButtonsHtml = `<div class="${actionClass}">
-        <button class="x-dl-action-btn x-dl-cat-0${staged ? ' staged' : ''}" data-category="" title="${staged ? '已暂存，再次点击取消' : '暂存'}">${staged ? '已暂存' : '暂存'}</button>
+        <button class="x-dl-action-btn x-dl-cat-0${staged ? ' staged' : ''}${item.zipping ? ' zipping' : ''}" data-category="" title="${item.zipping ? '正在打包中' : (staged ? '已暂存，再次点击取消' : '暂存')}">${item.zipping ? '打包中' : (staged ? '已暂存' : '暂存')}</button>
       </div>`;
     }
 
@@ -127,7 +130,9 @@ class MediaGridRenderer {
       <span class="x-media-type">${escapeAttr(item.type)}</span>
       ${isVideo ? `<div class="x-inline-play" title="在列表中播放">${ICON_PLAY}</div>` : ''}
       ${item.downloaded ? '<span class="x-downloaded-badge">已下载</span>' : (downloadState ? `<span class="x-downloading-badge ${downloadState}">${DOWNLOAD_STATE_LABELS[downloadState]}</span>` : '')}
-      ${item._stagedCategory != null ? `<span class="x-staged-badge">已暂存 · ${escapeAttr(this.getStagedLabel(item))}</span>` : ''}
+      ${item.zipping
+        ? '<span class="x-zipping-badge">打包中</span>'
+        : (item._stagedCategory != null ? `<span class="x-staged-badge">已暂存 · ${escapeAttr(this.getStagedLabel(item))}</span>` : '')}
       <div class="x-item-btn x-item-select-btn ${isSelected ? 'selected' : ''}" title="${selectTitle}">${isSelected ? ICON_CHECK : ICON_SELECT}</div>
       <div class="x-item-btn x-item-delete-btn" title="删除">${ICON_DELETE}</div>
       ${item.downloaded ? `<div class="x-item-btn x-item-download-btn downloaded" title="已下载">${ICON_CHECK}</div>` : downloadButtonsHtml}
@@ -365,24 +370,45 @@ class MediaGridRenderer {
   }
 
   /**
-   * 刷新单张卡片的暂存按钮状态与角标
+   * 刷新单张卡片的暂存按钮状态与角标（含打包中锁定状态）
    */
   updateStagedState(div, item) {
     if (!div || !item) return;
+    const zipping = !!item.zipping;
+
     div.querySelectorAll('.x-dl-action-btn').forEach(btn => {
-      const staged = item._stagedCategory != null &&
+      const staged = !zipping && item._stagedCategory != null &&
         String(item._stagedCategory) === String(btn.dataset.category);
       btn.classList.toggle('staged', staged);
+      btn.classList.toggle('zipping', zipping);
       if (this.usePresets) {
         const label = btn.textContent;
-        btn.title = staged ? `已暂存到${label}，再次点击取消` : `暂存到${label}`;
+        btn.title = zipping
+          ? '正在打包中'
+          : (staged ? `已暂存到${label}，再次点击取消` : `暂存到${label}`);
       } else {
-        btn.textContent = staged ? '已暂存' : '暂存';
-        btn.title = staged ? '已暂存，再次点击取消' : '暂存';
+        btn.textContent = zipping ? '打包中' : (staged ? '已暂存' : '暂存');
+        btn.title = zipping ? '正在打包中' : (staged ? '已暂存，再次点击取消' : '暂存');
       }
     });
 
-    let badge = div.querySelector('.x-staged-badge');
+    const stagedBadge = div.querySelector('.x-staged-badge');
+    let zipBadge = div.querySelector('.x-zipping-badge');
+
+    if (zipping) {
+      if (stagedBadge) stagedBadge.remove();
+      if (!zipBadge) {
+        zipBadge = document.createElement('span');
+        zipBadge.className = 'x-zipping-badge';
+        zipBadge.textContent = '打包中';
+        div.appendChild(zipBadge);
+      }
+      return;
+    }
+
+    if (zipBadge) zipBadge.remove();
+
+    let badge = stagedBadge;
     if (item._stagedCategory != null) {
       if (!badge) {
         badge = document.createElement('span');
@@ -429,6 +455,12 @@ class MediaGridRenderer {
 
     const downloadingBadge = div.querySelector('.x-downloading-badge');
     if (downloadingBadge) downloadingBadge.remove();
+
+    // 打包完成/下载完成后，暂存/打包标识不再需要
+    const stagedBadge = div.querySelector('.x-staged-badge');
+    if (stagedBadge) stagedBadge.remove();
+    const zippingBadge = div.querySelector('.x-zipping-badge');
+    if (zippingBadge) zippingBadge.remove();
 
     const existingBadge = div.querySelector('.x-downloaded-badge');
     if (!existingBadge) {

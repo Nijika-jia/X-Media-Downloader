@@ -9,19 +9,11 @@
   <div class="x-sidebar-header">
     <div class="x-sidebar-title">X-媒体下载器 <span id="x-count">(0)</span></div>
     <div class="x-sidebar-actions">
-      <label class="x-folder-picker" title="选择下载分类">
-        <span>保存到</span>
-        <select id="x-download-category">
-          <option value="real">真人</option>
-          <option value="anime">动漫</option>
-        </select>
-      </label>
       <button class="x-icon-btn" id="x-select-all-btn" title="全选">全选</button>
       <button class="x-icon-btn danger" id="x-delete-selected-btn" title="删除选中">删除</button>
       <button class="x-icon-btn" id="x-unstage-btn" title="取消选中项的暂存" hidden>取消暂存</button>
-      <button class="x-icon-btn primary" id="x-download-selected-btn" title="下载选中">下载选中</button>
       <button class="x-icon-btn x-zip-btn" id="x-zip-btn" title="打包下载暂存区"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><line x1="10" y1="12" x2="14" y2="12"></line></svg><span class="x-zip-badge" id="x-zip-badge" hidden>0</span></button>
-      <button class="x-icon-btn" id="x-export-btn" title="导出媒体列表"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></button>
+      <button class="x-icon-btn" id="x-export-btn" title="导出当前筛选结果（如只导出未下载）"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></button>
       <button class="x-icon-btn" id="x-import-btn" title="导入媒体列表"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>
       <button class="x-icon-btn" id="x-download-center-btn" title="打开下载中心"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
       <button class="x-icon-btn" id="x-stats-btn" title="统计"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg></button>
@@ -87,8 +79,6 @@
       <span class="x-status-dot x-status-dot-connected"></span>
       <span>采集中</span>
     </span>
-    <span class="x-status-item" id="x-status-category"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> 默认</span>
-    <span class="x-status-item x-status-downloads" id="x-status-downloads">无下载任务</span>
     <span class="x-status-item x-status-staged" id="x-status-staged" style="display:none;">暂存 0</span>
     <span class="x-status-item x-status-boss" id="x-status-boss" style="display:none;"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> 隐私模式</span>
   </div>

@@ -1,9 +1,7 @@
 import MediaStore from './MediaStore';
 import MediaGridRenderer from './MediaGridRenderer';
-import { ICON_FOLDER, ICON_SHIELD, ICON_ALERT } from './constants';
+import { ICON_SHIELD } from './constants';
 import { computeHashes } from './phash';
-
-const CATEGORY_LABELS = { '': '默认', real: '真人', anime: '动漫' };
 
 class SidePanelApp {
   constructor() {
@@ -14,6 +12,9 @@ class SidePanelApp {
     this.bossMode = false;
     this.connected = false;
     this.sessionStats = { captured: 0, downloaded: 0, photos: 0, videos: 0 };
+    // 正在打包的批次（该批次的项在打包期间不允许取消暂存）
+    this.zipBatchIds = new Set();
+    this.zipBatchActive = false;
 
     this.cacheElements();
     this.bindEvents();
@@ -26,9 +27,7 @@ class SidePanelApp {
 
   cacheElements() {
     this.selectAllBtn = document.getElementById('x-select-all-btn');
-    this.downloadSelectedBtn = document.getElementById('x-download-selected-btn');
     this.deleteSelectedBtn = document.getElementById('x-delete-selected-btn');
-    this.downloadCategorySelect = document.getElementById('x-download-category');
     this.clearBtn = document.getElementById('x-clear-btn');
     this.countEl = document.getElementById('x-count');
     this.emptyState = document.getElementById('x-empty-state');
@@ -48,8 +47,6 @@ class SidePanelApp {
     this.refreshBtn = document.getElementById('x-refresh-btn');
     this.bossOverlay = document.getElementById('x-boss-overlay');
     this.statusConnection = document.getElementById('x-status-connection');
-    this.statusCategory = document.getElementById('x-status-category');
-    this.statusDownloads = document.getElementById('x-status-downloads');
     this.statusStaged = document.getElementById('x-status-staged');
     this.statusBoss = document.getElementById('x-status-boss');
     this.statsBtn = document.getElementById('x-stats-btn');
@@ -128,8 +125,6 @@ class SidePanelApp {
           this.cat2Label.value = categories[1].label || '';
           this.cat2Folder.value = (settings.categoryFolders && settings.categoryFolders[categories[1].value]) || '';
         }
-        // 更新顶部下拉框
-        this.updateCategorySelect(usePresets, categories, settings.categoryFolders);
       }
     } catch (e) {}
   }
@@ -143,23 +138,6 @@ class SidePanelApp {
         await this.restoreDownloadStates();
       }
     } catch (e) {}
-  }
-
-  updateCategorySelect(usePresets, categories, categoryFolders) {
-    this.downloadCategorySelect.innerHTML = '';
-    if (usePresets && categories && categories.length > 0) {
-      categories.forEach(cat => {
-        const opt = document.createElement('option');
-        opt.value = cat.value;
-        opt.textContent = cat.label;
-        this.downloadCategorySelect.appendChild(opt);
-      });
-    } else {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = '默认';
-      this.downloadCategorySelect.appendChild(opt);
-    }
   }
 
   async updateSettings(patch) {
@@ -202,7 +180,6 @@ class SidePanelApp {
     await this.updateSettings({ customCategories: categories, categoryFolders });
     this.currentCategories = categories;
     this.renderer.setCategories(true, categories);
-    this.updateCategorySelect(true, categories, categoryFolders);
     this.showInfoToast('预设已保存');
   }
 
@@ -214,6 +191,11 @@ class SidePanelApp {
 
     this.mediaStore.addListener((event) => {
       this.updateCount();
+      if (event === 'staged_changed') {
+        // 暂存变化不影响选择集合，不需要全量刷新选择 UI
+        this.updateStagedStatus();
+        return;
+      }
       this.updateSelectionUI();
     });
 
@@ -271,7 +253,6 @@ class SidePanelApp {
         // 立即刷新渲染
         const categories = this.getCurrentCategories();
         this.renderer.setCategories(usePresets, categories);
-        this.updateCategorySelect(usePresets, categories, null);
       });
     }
 
@@ -309,13 +290,6 @@ class SidePanelApp {
       this.renderer.updateAllItemSelections();
     });
 
-    this.downloadSelectedBtn.addEventListener('click', () => {
-      const items = this.mediaStore.getSelectedItems();
-      if (items.length === 0) return;
-
-      this.downloadItems(items, this.downloadCategorySelect.value);
-    });
-
     if (this.deleteSelectedBtn) {
       this.deleteSelectedBtn.addEventListener('click', () => {
         const items = this.mediaStore.getSelectedItems();
@@ -332,7 +306,7 @@ class SidePanelApp {
     this.clearBtn.addEventListener('click', () => {
       this.mediaStore.clear();
       this.mediaStore.applyStaged([]);
-      this.renderer.grid.innerHTML = '';
+      this.renderer.render();
       this.updateCount();
       this.updateSelectionUI();
       this.updateStagedStatus();
@@ -357,6 +331,7 @@ class SidePanelApp {
     }
 
     this.setupBoxSelection();
+    this.setupRowStageBar();
 
     if (this.selectionClear) {
       this.selectionClear.addEventListener('click', () => {
@@ -375,10 +350,6 @@ class SidePanelApp {
           this.toggleBossMode();
         }
       }
-    });
-
-    this.downloadCategorySelect.addEventListener('change', () => {
-      this.updateStatusCategory();
     });
 
     this.statsBtn.addEventListener('click', () => this.toggleStats());
@@ -615,6 +586,15 @@ class SidePanelApp {
   async stageSelectedItems(category) {
     const items = this.mediaStore.getSelectedItems();
     if (items.length === 0) return;
+    this.mediaStore.clearSelection();
+    await this.stageItemsBatch(items, category);
+  }
+
+  /**
+   * 批量暂存公共逻辑（乐观更新 + 失败回滚）
+   */
+  async stageItemsBatch(items, category) {
+    if (!items || items.length === 0) return;
 
     const payload = items.map(item => {
       const storeItem = this.mediaStore.getItem(item.id);
@@ -622,26 +602,119 @@ class SidePanelApp {
       return { ...item, phash: storeItem.phash, dhash: storeItem.dhash };
     });
 
+    // 乐观更新：立即变为已暂存，后台失败再回滚
+    const previousStaged = Array.from(this.mediaStore.stagedMap.values());
+    this.mediaStore.setStagedMany(payload, category);
+    this.renderer.render();
+    this.updateSelectionUI();
+    this.updateStagedStatus();
+    this.updateCount();
+    this.showInfoToast(`已将 ${payload.length} 项暂存`);
+
     try {
       const result = await chrome.runtime.sendMessage({
         action: 'stage_media_batch',
         items: payload,
         category: category == null ? '' : category
       });
-      if (!result || !result.ok) {
-        this.showInfoToast('批量暂存失败，请稍后重试');
-        return;
-      }
-      this.mediaStore.setStagedMany(payload, category);
-      this.mediaStore.clearSelection();
+      if (!result || !result.ok) throw new Error('stage_batch_failed');
+    } catch (e) {
+      this.mediaStore.applyStaged(previousStaged);
       this.renderer.render();
       this.updateSelectionUI();
       this.updateStagedStatus();
       this.updateCount();
-      this.showInfoToast(`已将 ${payload.length} 项暂存`);
-    } catch (e) {
       this.showInfoToast('批量暂存失败，请稍后重试');
     }
+  }
+
+  // ===== 整排暂存 =====
+
+  setupRowStageBar() {
+    const grid = this.mediaGrid;
+    if (!grid) return;
+
+    const bar = document.createElement('div');
+    bar.className = 'x-row-stage-bar';
+    bar.hidden = true;
+    grid.appendChild(bar);
+    this.rowStageBar = bar;
+    this.rowStageIds = [];
+
+    let lastCardId = null;
+    grid.addEventListener('mouseover', (e) => {
+      if (bar.contains(e.target)) return;
+      const card = e.target.closest('.x-media-item');
+      if (!card) return;
+      if (card.dataset.id === lastCardId) return;
+      lastCardId = card.dataset.id;
+      this.positionRowStageBar(card);
+    });
+
+    grid.addEventListener('mouseleave', () => {
+      lastCardId = null;
+      this.hideRowStageBar();
+    });
+
+    // 列表重建后旧的定位/ID 已失效，直接隐藏
+    this.renderer.onRender = () => {
+      lastCardId = null;
+      this.hideRowStageBar();
+    };
+  }
+
+  positionRowStageBar(card) {
+    if (!this.rowStageBar) return;
+    const all = Array.from(this.mediaGrid.querySelectorAll('.x-media-item'));
+    const rowCards = all
+      .filter(el => Math.abs(el.offsetTop - card.offsetTop) < 2)
+      .sort((a, b) => a.offsetLeft - b.offsetLeft);
+    if (rowCards.length === 0) return;
+
+    const first = rowCards[0];
+    this.rowStageIds = rowCards.map(el => el.dataset.id);
+
+    // 每次定位时重建分类按钮，确保用上最新的分类设置
+    this.rowStageBar.innerHTML = '';
+    const usePresets = this.renderer.usePresets && this.renderer.categories.length > 0;
+    const categories = usePresets
+      ? this.renderer.categories
+      : [{ value: '', label: '暂存' }];
+
+    categories.forEach((cat, i) => {
+      const btn = document.createElement('button');
+      btn.className = `x-row-stage-btn${usePresets ? ` x-dl-cat-${i % 3}` : ''}`;
+      btn.textContent = cat.label;
+      btn.title = `把这一排暂存到${cat.label}`;
+      btn.addEventListener('mousedown', (e) => e.stopPropagation());
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.stageRowItems(cat.value);
+      });
+      this.rowStageBar.appendChild(btn);
+    });
+
+    this.rowStageBar.style.left = `${first.offsetLeft + first.offsetWidth / 2}px`;
+    this.rowStageBar.style.top = `${first.offsetTop + 40}px`;
+    this.rowStageBar.hidden = false;
+  }
+
+  hideRowStageBar() {
+    if (this.rowStageBar) this.rowStageBar.hidden = true;
+    this.rowStageIds = [];
+  }
+
+  async stageRowItems(category) {
+    const ids = this.rowStageIds || [];
+    const items = ids
+      .map(id => this.mediaStore.getItem(id))
+      .filter(item => item && item._stagedCategory == null && !item.downloaded && !item.zipping);
+    if (items.length === 0) {
+      this.showInfoToast('这一排没有可暂存的项');
+      return;
+    }
+    await this.stageItemsBatch(items, category);
+    this.hideRowStageBar();
   }
 
   toggleSettings() {
@@ -823,12 +896,6 @@ class SidePanelApp {
     }
   }
 
-  updateStatusCategory() {
-    const value = this.downloadCategorySelect.value;
-    const label = CATEGORY_LABELS[value] || value;
-    this.statusCategory.innerHTML = `${ICON_FOLDER} ${label}`;
-  }
-
   listenForMessages() {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === 'media_intercepted_forward') {
@@ -849,13 +916,38 @@ class SidePanelApp {
           this.showInfoToast('下载失败，可在下载中心手动重试');
         }
       }
+      if (message.action === 'zip_batch_ready' && message.batch) {
+        this.zipBatchIds = new Set((message.batch.items || []).map(item => String(item.id)));
+        this.zipBatchActive = true;
+        this.applyZippingState(true);
+      }
+      if (message.action === 'zip_batch_cancelled') {
+        this.applyZippingState(false);
+        this.zipBatchActive = false;
+        this.zipBatchIds.clear();
+        this.updateStagedStatus();
+      }
       if (message.action === 'zip_batch_completed' && Array.isArray(message.ids)) {
+        const completedIds = new Set(message.ids.map(String));
         this.mediaStore.markDownloaded(message.ids);
         message.ids.forEach(id => {
           this.renderer.markItemDownloaded(id);
           this.mediaStore.setStaged(id, null);
         });
+        // 失败项解除打包中状态，仍保留暂存以便重试
+        this.zipBatchIds.forEach(id => {
+          if (completedIds.has(String(id))) return;
+          const item = this.mediaStore.getItem(id);
+          if (!item) return;
+          item.zipping = false;
+          this.renderer.updateStagedState(
+            this.renderer.grid.querySelector(`[data-id="${id}"]`),
+            item
+          );
+        });
         this.updateStagedStatus();
+        this.zipBatchActive = false;
+        this.zipBatchIds.clear();
       }
     });
   }
@@ -1045,141 +1137,6 @@ class SidePanelApp {
     }
   }
 
-  async downloadItems(items, category = '') {
-    const requestItems = [];
-    const activeIds = [];
-    const downloadedIds = [];
-    const seenIds = new Set();
-
-    (Array.isArray(items) ? items : []).forEach(item => {
-      const storeItem = item && this.mediaStore.getItem(item.id);
-      if (!storeItem || seenIds.has(storeItem.id)) return;
-      seenIds.add(storeItem.id);
-
-      if (storeItem.downloaded) {
-        downloadedIds.push(storeItem.id);
-      } else if (storeItem.downloading) {
-        activeIds.push(storeItem.id);
-      } else {
-        requestItems.push(storeItem);
-      }
-    });
-
-    const queuedIds = requestItems.map(item => item.id);
-    if (queuedIds.length > 0) {
-      // 先锁定卡片，再等待后台响应，连续点击时也能立即看到每一项已入队。
-      this.mediaStore.markDownloading(queuedIds, 'queued');
-      queuedIds.forEach(id => this.renderer.markItemDownloading(id, 'queued'));
-    }
-
-    const immediateFeedback = [];
-    if (queuedIds.length > 0) {
-      immediateFeedback.push(`${queuedIds.length} 个任务已加入队列`);
-    }
-    if (activeIds.length > 0) {
-      immediateFeedback.push(`${activeIds.length} 个任务正在下载中`);
-    }
-    if (downloadedIds.length > 0) {
-      immediateFeedback.push(`${downloadedIds.length} 个文件已下载过`);
-    }
-    if (immediateFeedback.length > 0) {
-      this.showInfoToast(immediateFeedback.join('，'));
-    }
-    if (requestItems.length === 0) return;
-
-    try {
-      // 附加哈希指纹（如果已计算）
-      const itemsWithPhash = requestItems.map(item => {
-        const storeItem = this.mediaStore.getItem(item.id);
-        if (!storeItem || (!storeItem.phash && !storeItem.dhash)) return item;
-        return { ...item, phash: storeItem.phash, dhash: storeItem.dhash };
-      });
-
-      const result = await chrome.runtime.sendMessage({
-        action: 'download_media',
-        items: itemsWithPhash,
-        category: category
-      });
-
-      if (result) {
-        const feedback = [];
-        const started = result.started || [];
-        const inProgress = result.inProgress || [];
-        const retrying = result.retrying || [];
-        const duplicates = result.duplicates || [];
-        const completed = result.downloaded || [];
-        const failed = result.failed || [];
-        const acceptedIds = new Set([
-          ...started,
-          ...inProgress,
-          ...retrying,
-          ...duplicates,
-          ...completed
-        ].map(id => String(id)));
-
-        // 只把后台明确判定失败或无效的项回滚，避免请求尚未返回时短暂丢失状态。
-        const unresolvedIds = queuedIds.filter(id => !acceptedIds.has(String(id)));
-        if (unresolvedIds.length > 0) {
-          this.mediaStore.markNotDownloaded(unresolvedIds);
-          unresolvedIds.forEach(id => this.renderer.markItemNotDownloaded(id));
-        }
-
-        if (started.length > 0) {
-          this.mediaStore.markDownloading(started, 'downloading');
-          started.forEach(id => this.renderer.markItemDownloading(id, 'downloading'));
-        }
-        if (inProgress.length > 0) {
-          this.mediaStore.markDownloading(inProgress, 'downloading');
-          inProgress.forEach(id => this.renderer.markItemDownloading(id, 'downloading'));
-        }
-        if (retrying.length > 0) {
-          this.mediaStore.markDownloading(retrying, 'retrying');
-          retrying.forEach(id => this.renderer.markItemDownloading(id, 'retrying'));
-          feedback.push(`${retrying.length} 个任务将在网络恢复后自动重试`);
-        }
-        if (completed.length > 0) {
-          this.mediaStore.markDownloaded(completed);
-          completed.forEach(id => {
-            this.renderer.markItemDownloaded(id);
-          });
-          this.mediaStore.clearSelection();
-          this.renderer.updateAllItemSelections();
-        }
-
-        if (duplicates.length > 0) {
-          this.showDuplicateToast(duplicates.length);
-          duplicates.forEach(id => {
-            this.mediaStore.markDownloaded([id]);
-            this.renderer.markItemDownloaded(id);
-          });
-          this.mediaStore.clearSelection();
-          this.renderer.updateAllItemSelections();
-        }
-
-        if (failed.length > 0) {
-          this.mediaStore.markNotDownloaded(failed);
-          failed.forEach(id => this.renderer.markItemNotDownloaded(id));
-          feedback.push(`${failed.length} 个下载失败，详情见下载中心`);
-        }
-        if (result.invalid > 0) {
-          feedback.push(`${result.invalid} 个媒体地址无效`);
-        }
-        if (feedback.length > 0) {
-          this.showInfoToast(feedback.join('，'));
-        }
-      } else {
-        this.mediaStore.markNotDownloaded(queuedIds);
-        queuedIds.forEach(id => this.renderer.markItemNotDownloaded(id));
-        this.showInfoToast('下载请求没有得到响应，请重试');
-      }
-    } catch (e) {
-      this.mediaStore.markNotDownloaded(queuedIds);
-      queuedIds.forEach(id => this.renderer.markItemNotDownloaded(id));
-      await this.restoreDownloadStates();
-      this.showInfoToast('下载请求失败，请稍后重试');
-    }
-  }
-
   // ===== 暂存区（卡片下方的分区按钮） =====
 
   async loadStagedItems() {
@@ -1188,6 +1145,16 @@ class SidePanelApp {
       if (!result || !Array.isArray(result.items)) return;
 
       this.mediaStore.applyStaged(result.items);
+
+      // 打包进行中时侧边栏可能刚打开，从 session 恢复批次锁定状态
+      try {
+        const batchResult = await chrome.storage.session.get('x_zip_batch');
+        const batch = batchResult && batchResult.x_zip_batch;
+        if (batch && Array.isArray(batch.items)) {
+          this.zipBatchIds = new Set(batch.items.map(item => String(item.id)));
+          this.zipBatchActive = true;
+        }
+      } catch (e) {}
 
       // 暂存项可能不在当前捕获列表里（跨会话或列表已清空），补回列表以便管理
       const missing = result.items.filter(item => !this.mediaStore.getItem(item.id));
@@ -1208,6 +1175,7 @@ class SidePanelApp {
       this.renderer.updateAllStagedStates();
       this.updateStagedStatus();
       this.updateCount();
+      if (this.zipBatchActive) this.applyZippingState(true);
     } catch (e) {}
   }
 
@@ -1216,11 +1184,34 @@ class SidePanelApp {
     const staged = storeItem._stagedCategory;
     const normalizedCategory = category == null ? '' : category;
     const isSame = staged != null && String(staged) === String(normalizedCategory);
+    const previous = this.mediaStore.stagedMap.get(String(item.id)) || null;
+
+    // 打包进行中：批次内的项已进入快照，取消暂存不会影响打包，直接锁定
+    if (isSame && this.zipBatchActive && this.zipBatchIds.has(String(item.id))) {
+      this.showInfoToast('该项正在打包中，如需取消请先在下载中心取消打包');
+      return;
+    }
+
+    // 乐观更新：点下去立即变色，后台失败再回滚
+    if (isSame) {
+      this.mediaStore.setStaged(item.id, null);
+    } else {
+      this.mediaStore.setStaged(item.id, {
+        id: item.id,
+        url: item.url,
+        thumb: item.thumb || null,
+        type: item.type,
+        phash: storeItem.phash || null,
+        dhash: storeItem.dhash || null,
+        category: normalizedCategory,
+        stagedAt: Date.now()
+      });
+    }
+    this.refreshStagedUI(item.id, storeItem);
 
     try {
       if (isSame) {
         await chrome.runtime.sendMessage({ action: 'unstage_media', ids: [item.id] });
-        this.mediaStore.setStaged(item.id, null);
       } else {
         const payload = (!storeItem.phash && !storeItem.dhash)
           ? item
@@ -1230,38 +1221,64 @@ class SidePanelApp {
           item: payload,
           category: normalizedCategory
         });
-        this.mediaStore.setStaged(item.id, {
-          id: item.id,
-          url: item.url,
-          thumb: item.thumb || null,
-          type: item.type,
-          phash: storeItem.phash || null,
-          dhash: storeItem.dhash || null,
-          category: normalizedCategory,
-          stagedAt: Date.now()
-        });
-      }
-      this.renderer.updateStagedState(
-        this.renderer.grid.querySelector(`[data-id="${item.id}"]`),
-        storeItem
-      );
-      this.updateStagedStatus();
-
-      // 「已暂存」筛选或「隐藏已暂存」开启时，暂存状态变化需要立即增减列表项
-      if (this.statusFilter === 'staged' || this.renderer.currentHideStaged) {
-        this.renderer.render();
-        this.updateSelectionUI();
       }
     } catch (e) {
+      this.mediaStore.setStaged(item.id, previous);
+      this.refreshStagedUI(item.id, storeItem);
       this.showInfoToast('暂存操作失败，请稍后重试');
     }
   }
 
+  refreshStagedUI(itemId, storeItem) {
+    this.renderer.updateStagedState(
+      this.renderer.grid.querySelector(`[data-id="${itemId}"]`),
+      storeItem
+    );
+    this.updateStagedStatus();
+
+    // 隐藏已暂存：暂存后只移除这一张卡片，避免整个网格重建导致卡顿
+    if (this.renderer.currentHideStaged) {
+      if (storeItem._stagedCategory != null) {
+        this.renderer.removeItem(itemId);
+        this.updateCount();
+      } else {
+        // 取消暂存需要把卡片加回列表，低频操作，重绘可接受
+        this.renderer.render();
+        this.updateSelectionUI();
+      }
+      return;
+    }
+
+    // 「已暂存」筛选：列表成员会变化，低频，重绘可接受
+    if (this.statusFilter === 'staged') {
+      this.renderer.render();
+      this.updateSelectionUI();
+    }
+  }
+
+  /**
+   * 打包期间给批次内的卡片加"打包中"状态
+   */
+  applyZippingState(active) {
+    Array.from(this.zipBatchIds).forEach(id => {
+      const item = this.mediaStore.getItem(id);
+      if (!item) return;
+      item.zipping = !!active;
+      this.renderer.updateStagedState(
+        this.renderer.grid.querySelector(`[data-id="${id}"]`),
+        item
+      );
+    });
+    this.updateStagedStatus();
+  }
+
   updateStagedStatus() {
     const count = this.mediaStore.stagedMap.size;
+    const zipping = this.zipBatchActive;
     if (this.statusStaged) {
-      this.statusStaged.style.display = count > 0 ? 'inline-flex' : 'none';
-      this.statusStaged.textContent = `暂存 ${count}`;
+      this.statusStaged.style.display = (count > 0 || zipping) ? 'inline-flex' : 'none';
+      this.statusStaged.textContent = zipping ? `打包中 ${this.zipBatchIds.size}` : `暂存 ${count}`;
+      this.statusStaged.classList.toggle('zipping', zipping);
     }
     if (this.zipBadge) {
       this.zipBadge.hidden = count === 0;
@@ -1327,33 +1344,25 @@ class SidePanelApp {
         this.showInfoToast('打包任务创建失败');
         return;
       }
+
+      // 后台已把已下载的项移出暂存区；它们属于重复项，本地同步为已下载状态
+      if (Array.isArray(result.removedIds) && result.removedIds.length > 0) {
+        this.mediaStore.markDownloaded(result.removedIds);
+        result.removedIds.forEach(id => this.mediaStore.setStaged(id, null));
+        this.renderer.render();
+        this.updateSelectionUI();
+        this.updateStagedStatus();
+        this.updateCount();
+      }
+
       if (result.count === 0) {
-        this.showInfoToast(`没有需要打包的新文件${result.duplicates ? `（${result.duplicates} 个已下载过）` : ''}`);
+        this.showInfoToast(`没有需要打包的新文件${result.duplicates ? `（${result.duplicates} 个已下载过，已移出暂存区）` : ''}`);
         return;
       }
       this.showInfoToast(`已创建打包任务：${result.count} 个文件${result.duplicates ? `，跳过 ${result.duplicates} 个已下载` : ''}，请在下载中心开始打包`);
     } catch (e) {
       this.showInfoToast('打包请求失败，请稍后重试');
     }
-  }
-
-  showDuplicateToast(count) {
-    const existing = document.querySelector('.x-duplicate-toast');
-    if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.className = 'x-duplicate-toast';
-    toast.innerHTML = `<span class="x-toast-icon">${ICON_ALERT}</span> ${count} 个文件已下载过，已跳过重复下载`;
-    document.body.appendChild(toast);
-
-    requestAnimationFrame(() => {
-      toast.classList.add('show');
-    });
-
-    setTimeout(() => {
-      toast.classList.remove('show');
-      setTimeout(() => toast.remove(), 300);
-    }, 3000);
   }
 
   showLightbox(item) {
@@ -1394,12 +1403,6 @@ class SidePanelApp {
   updateCount() {
     const counts = this.mediaStore.getCounts();
     this.countEl.innerHTML = `<span style="font-size: 14px; margin-left: 4px;">(${counts.total})</span> <span style="font-size: 12px; font-weight: normal; color: #71767b; margin-left: 4px;">图片 ${counts.photos} 视频 ${counts.videos} 已下 ${counts.downloaded} 未下 ${counts.notDownloaded}</span>`;
-    if (this.statusDownloads) {
-      this.statusDownloads.textContent = counts.downloading > 0
-        ? `下载中 ${counts.downloading}`
-        : '无下载任务';
-      this.statusDownloads.classList.toggle('active', counts.downloading > 0);
-    }
   }
 
   updateSelectionUI() {
@@ -1409,7 +1412,6 @@ class SidePanelApp {
     const allSelected = visibleIds.length > 0 &&
       visibleIds.every(id => this.mediaStore.selectedIds.has(id));
     this.selectAllBtn.textContent = allSelected ? '取消全选' : '全选';
-    this.downloadSelectedBtn.disabled = this.mediaStore.selectedIds.size === 0;
     this.updateSelectionBar();
   }
 
@@ -1417,25 +1419,44 @@ class SidePanelApp {
    * 导出媒体列表为 JSON 文件
    */
   exportMediaList() {
-    const data = this.mediaStore.exportData();
-    if (data.count === 0) {
-      this.showInfoToast('没有可导出的媒体');
+    // 所见即所得：导出当前筛选下的媒体（筛选「未下载」时就只导出未下载项）
+    const items = this.mediaStore.getFilteredItems(
+      this.typeFilter,
+      this.statusFilter,
+      this.renderer.currentHideStaged
+    );
+    if (items.length === 0) {
+      this.showInfoToast('当前筛选下没有可导出的媒体');
       return;
     }
 
+    const data = this.mediaStore.exportData(items);
     const jsonStr = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
 
+    const statusSuffixMap = {
+      downloaded: '-downloaded',
+      not_downloaded: '-undownloaded',
+      staged: '-staged'
+    };
+    const typeSuffix = this.typeFilter === 'photo'
+      ? '-photos'
+      : (this.typeFilter === 'video' ? '-videos' : '');
+    const suffix = (statusSuffixMap[this.statusFilter] || '') + typeSuffix;
+
     const a = document.createElement('a');
     a.href = url;
-    a.download = `x-media-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `x-media-export-${new Date().toISOString().slice(0, 10)}${suffix}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    this.showInfoToast(`已导出 ${data.count} 个媒体`);
+    const filtered = this.typeFilter !== 'all' ||
+      this.statusFilter !== 'all' ||
+      this.renderer.currentHideStaged;
+    this.showInfoToast(`已导出 ${data.count} 个媒体${filtered ? '（按当前筛选）' : ''}`);
   }
 
   /**

@@ -21,8 +21,10 @@ class Application {
     this.settings = defaultSettings;
     // 串行化 session storage 写入，避免并发 media_intercepted 消息 get-then-set 互相覆盖丢数据
     this._capturedWriteChain = Promise.resolve();
-    // 串行化暂存区写入
-    this._stagedWriteChain = Promise.resolve();
+    // 暂存区内存缓存 + 合并落盘，避免快速连点时反复全量读写 storage
+    this._stagedCache = null;
+    this._stagedLoadPromise = null;
+    this._stagedFlushTimer = null;
   }
 
   static app() {
@@ -159,27 +161,34 @@ class Application {
 
   // ===== 暂存区（按分类暂存，等待打包）=====
 
+  /**
+   * 读取暂存清单；内存缓存避免每次点击都全量读 storage
+   */
   async getStagedItems() {
-    return new Promise(resolve => {
-      browser.storage.local.get('x_staged_media', result => {
-        resolve(result.x_staged_media && typeof result.x_staged_media === 'object'
-          ? result.x_staged_media
-          : {});
+    if (this._stagedCache) return this._stagedCache;
+    if (!this._stagedLoadPromise) {
+      this._stagedLoadPromise = new Promise(resolve => {
+        browser.storage.local.get('x_staged_media', result => {
+          this._stagedCache = result.x_staged_media && typeof result.x_staged_media === 'object'
+            ? result.x_staged_media
+            : {};
+          resolve(this._stagedCache);
+        });
       });
-    });
+    }
+    return this._stagedLoadPromise;
   }
 
-  async _writeStagedItems(map) {
-    return new Promise(resolve => {
-      browser.storage.local.set({ x_staged_media: map }, () => resolve());
-    });
-  }
-
-  _queueStagedWrite(writer) {
-    this._stagedWriteChain = this._stagedWriteChain
-      .then(writer)
-      .catch(() => {});
-    return this._stagedWriteChain;
+  /**
+   * 合并短时间内的多次修改，200ms 后一次性落盘
+   */
+  _scheduleStagedFlush() {
+    if (this._stagedFlushTimer) return;
+    this._stagedFlushTimer = setTimeout(() => {
+      this._stagedFlushTimer = null;
+      const snapshot = this._stagedCache || {};
+      browser.storage.local.set({ x_staged_media: snapshot }, () => {});
+    }, 200);
   }
 
   async stageItem(item, category) {
@@ -191,39 +200,37 @@ class Application {
 
   async stageItems(items, category) {
     if (!Array.isArray(items) || items.length === 0) return;
-    return this._queueStagedWrite(async () => {
-      const staged = await this.getStagedItems();
-      const cat = category == null ? '' : category;
-      items.forEach(media => {
-        staged[media.id] = {
-          id: media.id,
-          url: media.url,
-          thumb: media.thumb || null,
-          type: media.type,
-          phash: media.phash || null,
-          dhash: media.dhash || null,
-          category: cat,
-          stagedAt: Date.now()
-        };
-      });
-      await this._writeStagedItems(staged);
+    const staged = await this.getStagedItems();
+    const cat = category == null ? '' : category;
+    items.forEach(media => {
+      staged[media.id] = {
+        id: media.id,
+        url: media.url,
+        thumb: media.thumb || null,
+        type: media.type,
+        phash: media.phash || null,
+        dhash: media.dhash || null,
+        category: cat,
+        stagedAt: Date.now()
+      };
     });
+    this._scheduleStagedFlush();
   }
 
   async unstageItems(ids) {
     const idSet = new Set((Array.isArray(ids) ? ids : []).map(String));
     if (idSet.size === 0) return;
-    return this._queueStagedWrite(async () => {
-      const staged = await this.getStagedItems();
-      idSet.forEach(id => {
-        delete staged[id];
-      });
-      await this._writeStagedItems(staged);
+    const staged = await this.getStagedItems();
+    idSet.forEach(id => {
+      delete staged[id];
     });
+    this._scheduleStagedFlush();
   }
 
   async clearStagedItems() {
-    return this._queueStagedWrite(() => this._writeStagedItems({}));
+    this._stagedCache = {};
+    this._stagedLoadPromise = Promise.resolve(this._stagedCache);
+    this._scheduleStagedFlush();
   }
 
   async onMessage(message, sender, sendResponse) {
@@ -414,9 +421,16 @@ class Application {
       const historyService = this.getService('history');
       const checked = await historyService.batchCheckItems(items);
       const newItems = checked.newItems;
-      const duplicates = checked.duplicates.length;
+      const duplicates = checked.duplicates;
+
+      // 已下载过的暂存项永远不会被打包，直接移出暂存区，避免每次打包后残留
+      const removedIds = duplicates.map(item => String(item.id));
+      if (removedIds.length > 0) {
+        await this.unstageItems(removedIds);
+      }
+
       if (newItems.length === 0) {
-        sendResponse({ ok: true, count: 0, duplicates });
+        sendResponse({ ok: true, count: 0, duplicates: duplicates.length, removedIds });
         return;
       }
 
@@ -428,7 +442,7 @@ class Application {
         batchId: `zip_${Date.now()}`,
         createdAt: Date.now(),
         autoStart: true,
-        duplicates,
+        duplicates: duplicates.length,
         items: newItems.map(item => ({
           id: item.id,
           url: item.url,
@@ -449,7 +463,21 @@ class Application {
         browser.runtime.sendMessage({ action: 'zip_batch_ready', batch });
       } catch (e) {}
 
-      sendResponse({ ok: true, count: newItems.length, duplicates });
+      sendResponse({ ok: true, count: newItems.length, duplicates: duplicates.length, removedIds });
+      return;
+    }
+
+    if (message.action === 'zip_batch_cancel') {
+      await new Promise(resolve => {
+        browser.storage.session.remove('x_zip_batch', () => resolve());
+      });
+      try {
+        browser.runtime.sendMessage({
+          action: 'zip_batch_cancelled',
+          batchId: message.batchId || null
+        });
+      } catch (e) {}
+      sendResponse({ ok: true });
       return;
     }
 
