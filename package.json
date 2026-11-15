@@ -29,5 +29,8 @@
     "mini-css-extract-plugin": "^2.10.2",
     "webpack": "^5.106.2",
     "webpack-cli": "^7.0.2"
+  },
+  "dependencies": {
+    "client-zip": "^2.5.1"
   }
 }

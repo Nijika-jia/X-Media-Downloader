@@ -18,10 +18,26 @@
       </div>
     </header>
 
+    <div class="dc-zip-panel" id="dc-zip-panel" hidden>
+      <div class="dc-zip-head">
+        <span class="dc-zip-title">批量打包</span>
+        <span class="dc-zip-count" id="dc-zip-count"></span>
+      </div>
+      <div class="dc-zip-status" id="dc-zip-status">等待开始</div>
+      <div class="dc-zip-bar">
+        <div class="dc-zip-bar-fill" id="dc-zip-bar-fill"></div>
+      </div>
+      <div class="dc-zip-actions">
+        <button class="dc-zip-btn primary" id="dc-zip-start">开始打包</button>
+        <button class="dc-zip-btn" id="dc-zip-cancel" hidden>取消</button>
+      </div>
+    </div>
+
     <div class="dc-filter-bar">
       <button class="dc-filter-btn active" data-filter="all">全部</button>
       <button class="dc-filter-btn" data-filter="pending">等待中</button>
       <button class="dc-filter-btn" data-filter="downloading">下载中</button>
+      <button class="dc-filter-btn" data-filter="retrying">重试中</button>
       <button class="dc-filter-btn" data-filter="completed">已完成</button>
       <button class="dc-filter-btn" data-filter="failed">失败</button>
     </div>
